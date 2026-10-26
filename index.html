@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0f17" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ElektroCoach" />
+  <title>ElektroCoach PRO – Prüfung & Praxis 2027</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-icon">⚡</div>
+        <div>
+          <div class="brand-title">ElektroCoach PRO</div>
+          <div class="brand-sub">Energie- & Gebäudetechnik · Ziel Juli 2027</div>
+        </div>
+      </div>
+      <div class="header-stats">
+        <div class="stat-chip" title="Lern-XP">✨ <span id="stat-xp">0</span> XP</div>
+        <div class="stat-chip" title="Sitzt sicher (Box 3–4)">🏆 <span id="stat-mastered">0</span></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <!-- TAB 1: DASHBOARD & WACKEL-RADAR -->
+    <section id="tab-home" class="tab-panel active">
+      <div class="hero-card">
+        <div class="hero-top">
+          <div>
+            <div class="hero-title">Moin Friedrich! 👋</div>
+            <p style="font-size:0.83rem;color:var(--text-muted);margin-top:2px;">
+              Dein persönlicher Prüfungs- & Baustellen-Trainer (100 % DIN VDE & Europa-Fachkunde).
+            </p>
+          </div>
+          <div class="hero-countdown" id="exam-countdown">⏱️ Juli 2027</div>
+        </div>
+        <div class="kpi-grid">
+          <div class="kpi-box">
+            <strong id="kpi-total-q">0</strong>
+            <small>Prüfungsfragen</small>
+          </div>
+          <div class="kpi-box">
+            <strong id="kpi-weak" style="color:#f87171;">0</strong>
+            <small>Box 1: Wackelt</small>
+          </div>
+          <div class="kpi-box">
+            <strong id="kpi-learning" style="color:#fbbf24;">0</strong>
+            <small>Box 2: Im Training</small>
+          </div>
+          <div class="kpi-box">
+            <strong id="kpi-safe" style="color:#34d399;">0</strong>
+            <small>Box 3+: Sitzt sicher</small>
+          </div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;">
+          <button class="btn-primary" onclick="ElektroApp.startQuizMode('weak')">
+            🎯 Akute Wackel-Themen trainieren
+          </button>
+          <button class="btn-secondary" onclick="ElektroApp.startQuizMode('quick10')">
+            ☕ 5-Minuten-Vesperpause (10 Fragen)
+          </button>
+          <button class="btn-secondary" onclick="ElektroApp.switchTab('sim')">
+            🔌 Zum Klemmbrett- & FluidSIM-Labor
+          </button>
+        </div>
+      </div>
+
+      <!-- WACKEL-THEMEN RADAR -->
+      <div class="section-card">
+        <div class="section-header">
+          <h2>🚨 Dein Wackel-Themen-Radar (aus unserem Coaching)</h2>
+          <span class="badge badge-red">Priorität Hoch</span>
+        </div>
+        <div class="weak-spot-list">
+          <div class="weak-item">
+            <div class="weak-item-info">
+              <h4>1. Motortypenschild: Δ 230 V / Y 400 V vs. Δ 400 V / Y 690 V</h4>
+              <p>Warum „230 V“ die maximale Spannung <em>einer einzelnen Spule</em> ist und warum ein 230/400-V-Motor am 400-V-Netz im Dreieck sofort durchbrennt.</p>
+            </div>
+            <button class="btn-secondary btn-sm" onclick="ElektroApp.switchTab('sim')">Im Labor testen →</button>
+          </div>
+          <div class="weak-item">
+            <div class="weak-item-info">
+              <h4>2. Antennen-Pegelrechnung mit dB & dBµV</h4>
+              <p>Einfach Plus & Minus rechnen: Startpegel (dBµV) + Verstärker (+dB) − Kabeldämpfung (−dB) − Dose (−dB).</p>
+            </div>
+            <button class="btn-secondary btn-sm" onclick="ElektroApp.switchTab('sim')">dB-Kettenrechner →</button>
+          </div>
+          <div class="weak-item">
+            <div class="weak-item-info">
+              <h4>3. FluidSIM: Stromloser Ruhezustand & Drahtbruchsicherheit</h4>
+              <p>Schaltpläne werden immer unbetätigt gezeichnet! Öffner (-S0, -F2 95/96) sind in Ruhe geschlossen und schützen bei Kabelbruch.</p>
+            </div>
+            <button class="btn-secondary btn-sm" onclick="ElektroApp.switchTab('sim')">Taschen-FluidSIM →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6 PRÜFUNGS-SCHWERPUNKTE -->
+      <div class="section-card">
+        <div class="section-header">
+          <h2>📚 Die 6 Prüfungs-Schwerpunkte (LF 1–13 & GP1/GP2)</h2>
+        </div>
+        <div id="categories-grid" class="cat-grid"></div>
+      </div>
+    </section>
+
+    <!-- TAB 2: PRÜFUNGS-DRILL & SPACED REPETITION -->
+    <section id="tab-quiz" class="tab-panel">
+      <div id="quiz-filter-bar" class="quiz-toolbar"></div>
+      <div id="quiz-container"></div>
+    </section>
+
+    <!-- TAB 3: INTERAKTIVES PRAXIS-LABOR (KLEMMBRETT, FLUIDSIM, dB) -->
+    <section id="tab-sim" class="tab-panel">
+      <div id="simulators-container"></div>
+    </section>
+
+    <!-- TAB 4: SPICKZETTEL & BAUSTELLEN-RECHNER -->
+    <section id="tab-cheats" class="tab-panel">
+      <div class="section-card">
+        <div class="section-header">
+          <h2>🧮 Schnellrechner: Schlupf, Drehstrom & Spannungsfall ΔU</h2>
+        </div>
+        <div id="quick-calculators"></div>
+      </div>
+      <div class="section-card">
+        <div class="section-header">
+          <h2>📑 Kompakte Prüfungs-Spickzettel (Offline)</h2>
+        </div>
+        <div id="cheatsheets-container"></div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="bottom-nav">
+    <div class="bottom-nav-inner">
+      <button class="nav-btn active" data-tab="home" onclick="ElektroApp.switchTab('home')">
+        <span class="nav-icon">🏠</span>
+        <span>Radar</span>
+      </button>
+      <button class="nav-btn" data-tab="quiz" onclick="ElektroApp.switchTab('quiz')">
+        <span class="nav-icon">🎯</span>
+        <span>Prüfungs-Drill</span>
+      </button>
+      <button class="nav-btn" data-tab="sim" onclick="ElektroApp.switchTab('sim')">
+        <span class="nav-icon">🔌</span>
+        <span>Praxis-Labor</span>
+      </button>
+      <button class="nav-btn" data-tab="cheats" onclick="ElektroApp.switchTab('cheats')">
+        <span class="nav-icon">📐</span>
+        <span>Spickzettel</span>
+      </button>
+    </div>
+  </nav>
+
+  <script src="js/data.js"></script>
+  <script src="js/simulators.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

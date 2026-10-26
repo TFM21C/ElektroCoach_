@@ -1,0 +1,8 @@
+[build]
+  publish = "."
+  command = "echo 'ElektroCoach PRO ready (static PWA)'"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
