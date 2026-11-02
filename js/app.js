@@ -11,11 +11,22 @@ window.ElektroApp = (function () {
     boxes: {}, // questionId -> 1 (Wackelt), 2 (Im Training), 3 (Sitzt), 4 (Meister)
     activeTab: 'home',
     quizFilter: 'weak', // 'all' | 'weak' | 'quick10' | categoryId
+    fachFilter: 'all', // 'all' | 'GST' | 'KoSys' | 'SG' | 'IE' | 'PuG'
     quizQueue: [],
     quizIndex: 0,
     answeredCurrent: false,
     selectedOption: null
   };
+
+  // Prüfungsfächer der Klasse EEL 12b (BS Lauingen, ISB-Lehrplan Jgst. 12/13)
+  const FAECHER = [
+    { id: 'all', label: 'Alle Fächer' },
+    { id: 'GST', label: 'GST (LF 12/13)', title: 'Gebäudesystemtechnik' },
+    { id: 'KoSys', label: 'KoSys (LF 9)', title: 'Kommunikationssysteme' },
+    { id: 'SG', label: 'SG (LF 10)', title: 'System- und Gerätetechnik' },
+    { id: 'IE', label: 'IE (LF 11)', title: 'Installations- und Energietechnik' },
+    { id: 'PuG', label: 'PuG (WiSo)', title: 'Politik und Gesellschaft' }
+  ];
 
   function loadState() {
     try {
@@ -24,6 +35,7 @@ window.ElektroApp = (function () {
         const parsed = JSON.parse(raw);
         state.xp = parsed.xp || 0;
         state.boxes = parsed.boxes || {};
+        if (FAECHER.some(f => f.id === parsed.fachFilter)) state.fachFilter = parsed.fachFilter;
       }
     } catch (e) {
       console.warn('LocalStorage konnte nicht geladen werden:', e);
@@ -43,7 +55,8 @@ window.ElektroApp = (function () {
         STORAGE_KEY,
         JSON.stringify({
           xp: state.xp,
-          boxes: state.boxes
+          boxes: state.boxes,
+          fachFilter: state.fachFilter
         })
       );
     } catch (e) {}
@@ -115,20 +128,26 @@ window.ElektroApp = (function () {
   // --------------------------------------------------------------------------
   // Quiz & Spaced Repetition (Tab 2)
   // --------------------------------------------------------------------------
+  function questionsInFach() {
+    if (state.fachFilter === 'all') return [...data.questions];
+    return data.questions.filter(q => q.fach === state.fachFilter);
+  }
+
   function buildQuizQueue(filter) {
     state.quizFilter = filter;
+    const base = questionsInFach();
     let pool = [];
     if (filter === 'weak') {
-      pool = data.questions.filter(q => (state.boxes[q.id] || 2) === 1 || q.isWeakSpot);
-      if (pool.length === 0) pool = [...data.questions];
+      pool = base.filter(q => (state.boxes[q.id] || 2) === 1 || q.isWeakSpot);
+      if (pool.length === 0) pool = [...base];
     } else if (filter === 'quick10') {
       // Priorisiere Box 1 und Box 2, mische auf 10 Fragen
-      const sorted = [...data.questions].sort((a, b) => (state.boxes[a.id] || 2) - (state.boxes[b.id] || 2));
+      const sorted = [...base].sort((a, b) => (state.boxes[a.id] || 2) - (state.boxes[b.id] || 2));
       pool = sorted.slice(0, 10);
     } else if (filter === 'all') {
-      pool = [...data.questions];
+      pool = [...base];
     } else {
-      pool = data.questions.filter(q => q.category === filter);
+      pool = base.filter(q => q.category === filter);
     }
 
     // Sortiere so, dass Box 1 zuerst kommt
@@ -146,7 +165,7 @@ window.ElektroApp = (function () {
     const filters = [
       { id: 'weak', label: '🎯 Wackel-Themen (Box 1)' },
       { id: 'quick10', label: '☕ 10er Vesperpause' },
-      { id: 'all', label: `Alle (${data.questions.length})` },
+      { id: 'all', label: `Alle (${questionsInFach().length})` },
       ...data.categories.map(c => ({ id: c.id, label: `${c.icon} ${c.shortTitle}` }))
     ];
 
@@ -159,6 +178,25 @@ window.ElektroApp = (function () {
       `
       )
       .join('');
+
+    const fachBar = document.getElementById('quiz-fach-bar');
+    if (fachBar) {
+      fachBar.innerHTML = FAECHER.map(f => {
+        const count = f.id === 'all' ? data.questions.length : data.questions.filter(q => q.fach === f.id).length;
+        return `
+          <button class="fach-pill ${state.fachFilter === f.id ? 'active' : ''}" ${f.title ? `title="${f.title}"` : ''} onclick="ElektroApp.setFachFilter('${f.id}')">
+            ${f.label} <span class="fach-pill-count">${count}</span>
+          </button>
+        `;
+      }).join('');
+    }
+  }
+
+  function setFachFilter(fach) {
+    state.fachFilter = fach;
+    saveState();
+    buildQuizQueue(state.quizFilter);
+    renderQuizCard();
   }
 
   function renderQuizCard() {
@@ -234,9 +272,12 @@ window.ElektroApp = (function () {
             <span class="badge ${boxInfo.cls}">${boxInfo.text}</span>
             ${q.isWeakSpot ? `<span class="badge badge-red">⚡ Fokus-Thema</span>` : ''}
           </div>
-          <small style="color:var(--text-muted);font-weight:700;">
-            Frage ${state.quizIndex + 1} von ${state.quizQueue.length}
-          </small>
+          <div class="quiz-card-meta">
+            ${q.fach ? `<span class="fach-badge fach-${q.fach}" title="${(FAECHER.find(f => f.id === q.fach) || {}).title || ''}">${q.fach}</span>` : ''}
+            <small style="color:var(--text-muted);font-weight:700;">
+              Frage ${state.quizIndex + 1} von ${state.quizQueue.length}
+            </small>
+          </div>
         </div>
 
         <div class="quiz-question-title">${q.question}</div>
@@ -421,6 +462,7 @@ window.ElektroApp = (function () {
   return {
     switchTab,
     startQuizMode,
+    setFachFilter,
     answerQuestion,
     nextQuestion,
     runQuickCalcs

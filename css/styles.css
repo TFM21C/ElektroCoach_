@@ -338,6 +338,67 @@ body {
   border-color: var(--accent-blue);
 }
 
+/* Fächer-Filter (EEL 12b, BS Lauingen) */
+.fach-toolbar {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 10px;
+  scrollbar-width: none;
+}
+
+.fach-toolbar::-webkit-scrollbar { display: none; }
+
+.fach-pill {
+  flex: 0 0 auto;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.fach-pill.active {
+  background: rgba(168, 85, 247, 0.16);
+  color: #d8b4fe;
+  border-color: var(--accent-purple);
+}
+
+.fach-pill-count {
+  font-weight: 600;
+  opacity: 0.7;
+  margin-left: 2px;
+}
+
+.quiz-card-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.fach-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  border: 1px solid currentColor;
+}
+
+.fach-GST { color: var(--accent-emerald); background: rgba(16, 185, 129, 0.12); }
+.fach-KoSys { color: var(--accent-blue); background: rgba(56, 189, 248, 0.12); }
+.fach-SG { color: var(--accent-amber); background: rgba(245, 158, 11, 0.12); }
+.fach-IE { color: #fca5a5; background: rgba(239, 68, 68, 0.12); }
+.fach-PuG { color: #d8b4fe; background: rgba(168, 85, 247, 0.12); }
+
 .quiz-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
