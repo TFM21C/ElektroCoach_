@@ -110,10 +110,10 @@ window.ELEKTRO_DATA = {
       fach: "IE",
       question: "Ein Durchlauferhitzer (3 gleiche Heizwiderstände) ist in Stern mit Neutralleiter am 400/230-V-Netz angeschlossen. Wie groß ist der Strom im Neutralleiter?",
       options: [
-        "Genauso groß wie ein Außenleiterstrom",
-        "0 A, weil sich die drei um 120° verschobenen Ströme gegenseitig aufheben",
-        "√3-mal so groß wie ein Außenleiterstrom",
-        "Ein Drittel des Außenleiterstroms"
+        "Genauso groß wie ein Außenleiterstrom, da sich die Ströme im Neutralleiter addieren",
+        "0 A, weil sich die drei um 120° phasenverschobenen Ströme im Sternpunkt aufheben",
+        "√3-mal so groß wie ein Außenleiterstrom, entsprechend der Dreieck-Verkettung",
+        "Ein Drittel des Außenleiterstroms, da sich der Summenstrom auf die Stränge aufteilt"
       ],
       correctIndex: 1,
       explanation: "Bei symmetrischer Last sind alle drei Strangströme gleich groß und jeweils um 120° phasenverschoben. Ihre Zeigersumme ist null – der N führt keinen Strom. Deshalb kann man reine Drehstromverbraucher wie Durchlauferhitzer oder Motoren auch ganz ohne N anschließen. Auf der Baustelle: Misst du an einem symmetrischen Verbraucher deutlichen Strom auf dem N, stimmt etwas nicht (defekter Heizstab, Oberschwingungen durch Elektronik).",
@@ -127,12 +127,12 @@ window.ELEKTRO_DATA = {
       fach: "IE",
       question: "In einer Altbau-Unterverteilung bricht bei unsymmetrischer Last (L1: 2 kW, L2: 200 W, L3: 1 kW) der Neutralleiter. Was passiert?",
       options: [
-        "Alle Verbraucher gehen sofort aus, weil der Stromkreis offen ist",
-        "Alle Verbraucher bekommen weiterhin 230 V",
-        "Sternpunktverschiebung: Der Strang mit der kleinsten Leistung (größter Widerstand) bekommt die höchste Spannung – bis fast 400 V",
-        "Der Strang mit der größten Leistung bekommt die höchste Spannung"
+        "Sternpunktverschiebung: Der Strang mit kleiner Leistung (großer R) bekommt Überspannung bis fast 400 V",
+        "Phasenausfall: Der Strang mit der größten Leistung zieht den höchsten Strom und löst den LS-Schalter aus",
+        "Spannungsgleichheit: Alle drei Stränge teilen sich die 400 V symmetrisch auf und laufen mit 133 V weiter",
+        "Totalausfall: Da der Sternleiter unterbrochen ist, schaltet das Netz alle drei Außenleiter sofort spannungsfrei"
       ],
-      correctIndex: 2,
+      correctIndex: 0,
       explanation: "Ohne N liegen die Verbraucher in Reihe zwischen den Außenleitern (400 V). Der Sternpunkt „wandert“ zum am stärksten belasteten Strang. Die Spannung teilt sich nach den Widerständen auf: Der 200-W-Verbraucher (großer Widerstand) bekommt fast 400 V und raucht ab, der 2-kW-Strang bekommt deutlich weniger als 230 V. Typisches Schadensbild: Fernseher, Netzteile und LED-Treiber auf einer Phase alle gleichzeitig defekt. Darum: N-Klemmen immer fest anziehen und kein N-Querschnitt kleiner als der Außenleiter bei Mehrphasen-Stromkreisen mit Elektroniklast.",
       formula: "Ohne N: Spannung teilt sich nach R auf → großer R (kleine P) = große U",
       source: "Fachkunde Kap. 7 (Blatt 7.1–7.16, unsymmetrische Last / Sternpunktverschiebung)",
@@ -156,10 +156,10 @@ window.ELEKTRO_DATA = {
       fach: "SG",
       question: "Worin unterscheidet sich der Synchronmotor grundsätzlich vom Asynchronmotor?",
       options: [
-        "Der Synchronmotor läuft genau mit der Drehfelddrehzahl n_s, der Asynchronmotor läuft mit Schlupf etwas langsamer",
-        "Der Asynchronmotor läuft genau mit n_s, der Synchronmotor langsamer",
-        "Beide laufen mit Schlupf, nur der Synchronmotor hat einen Kurzschlussläufer",
-        "Der Synchronmotor läuft nur an Gleichspannung"
+        "Der Synchronmotor läuft starr mit der Drehfelddrehzahl n_s, der Asynchronmotor benötigt lastabhängigen Schlupf",
+        "Der Asynchronmotor läuft exakt mit der Netzfrequenz f, der Synchronmotor benötigt dazu einen Frequenzumrichter",
+        "Beide Motoren laufen synchron zum Drehfeld, aber der Asynchronmotor besitzt Schleifringe zur Erregung",
+        "Der Synchronmotor erzeugt sein Drehmoment durch Wirbelströme, der Asynchronmotor durch Dauermagnete"
       ],
       correctIndex: 0,
       explanation: "Beim Asynchronmotor (Kurzschlussläufer) wird im Läufer nur dann Spannung induziert, wenn sich das Drehfeld relativ zum Läufer bewegt – er braucht also Schlupf, um Drehmoment zu bilden. Der Synchronmotor hat ein eigenes Läufermagnetfeld (Permanentmagnete oder erregte Wicklung) und „rastet“ im Drehfeld ein: n = n_s, unabhängig von der Last (bis zum Kippen). Baustelle: 95 % aller Pumpen, Lüfter und Werkstattmaschinen sind Asynchronmotoren; Synchronmotoren findest du bei Servoantrieben und modernen EC-/PM-Motoren.",
@@ -173,12 +173,12 @@ window.ELEKTRO_DATA = {
       fach: "SG",
       question: "Welche Brücken setzt du auf dem Motorklemmbrett für eine DREIECK-Schaltung?",
       options: [
-        "W2–U2–V2 waagerecht miteinander verbinden",
-        "U1–U2, V1–V2, W1–W2",
-        "Drei senkrechte Brücken: U1–W2, V1–U2, W1–V2",
-        "U1–V1–W1 miteinander verbinden"
+        "Drei senkrechte Brücken: U1–W2, V1–U2 und W1–V2 verbinden Wicklungsende mit nächstem Anfang",
+        "Eine waagerechte Brücke über W2–U2–V2 verbindet alle Wicklungsenden zu einem gemeinsamen Punkt",
+        "Drei waagerechte Brücken: U1–V1, V1–W1 und U2–V2 verbinden die Phasen parallel",
+        "Zwei diagonale Brücken: U1–U2 und V1–V2 schalten die Motorwicklungen in Reihe"
       ],
-      correctIndex: 2,
+      correctIndex: 0,
       explanation: "Auf dem Klemmbrett liegen oben U1 V1 W1 und unten (versetzt!) W2 U2 V2. Für Dreieck setzt du drei senkrechte Brücken: U1–W2, V1–U2, W1–V2 – so wird das Ende jeder Wicklung mit dem Anfang der nächsten verbunden. Für Stern legst du EINE waagerechte Brücke über W2–U2–V2 (meist mit zwei Blechen), das ist der Sternpunkt. U1–U2 zu brücken würde eine Wicklung kurzschließen.",
       formula: "Δ: U1–W2 | V1–U2 | W1–V2 (senkrecht)   ·   Y: W2–U2–V2 (waagerecht)",
       source: "Fachkunde Kap. 13 (Blatt 13.1–13.19, Klemmbrett & Leistungsschild)",
@@ -190,12 +190,12 @@ window.ELEKTRO_DATA = {
       fach: "IE",
       question: "Drei gleiche Heizwiderstände werden am 400-V-Netz von Stern auf Dreieck umgeklemmt. Wie ändert sich die Leistung?",
       options: [
-        "Sie bleibt gleich",
-        "Sie wird √3-mal so groß",
-        "Sie halbiert sich",
-        "Sie wird 3-mal so groß"
+        "Sie wird 3-mal so groß, da an jedem Widerstand die √3-fache Spannung anliegt (P ~ U²)",
+        "Sie wird √3-mal so groß (ca. 1,73-fach), entsprechend dem Verkettungsfaktor der Außenleiter",
+        "Sie bleibt unverändert, da der Gesamtwiderstand der drei Heizelemente identisch bleibt",
+        "Sie sinkt auf ein Drittel, weil der Dreiecksstrom sich auf zwei Stränge aufteilen muss"
       ],
-      correctIndex: 3,
+      correctIndex: 0,
       explanation: "Im Stern liegt jeder Widerstand an 230 V, im Dreieck an 400 V – also √3-fache Spannung. Weil P = U² / R, steigt die Leistung je Widerstand um (√3)² = 3. Genau deshalb nutzt man den Stern-Dreieck-Anlauf: Im Stern sind Anlaufstrom und Anlaufmoment nur ein Drittel. Umgekehrt: Klemmst du einen Heizstab versehentlich in Dreieck statt Stern, verdreifacht sich die Leistung und er brennt durch.",
       formula: "P_Δ = 3 · P_Y   |   I_Anlauf,Y = 1/3 · I_Anlauf,Δ   |   P = √3 · U · I · cos φ",
       source: "Fachkunde Kap. 7 (Blatt 7.1–7.16, Stern & Dreieck)",
@@ -207,10 +207,10 @@ window.ELEKTRO_DATA = {
       fach: "SG",
       question: "Auf dem Typenschild eines Motors steht „Δ 230 V / Y 400 V“. Das Netz ist 400/230 V. Wie schließt du ihn an?",
       options: [
-        "Dauerhaft in Stern (Y) – ein Stern-Dreieck-Anlauf ist NICHT möglich",
-        "Mit Stern-Dreieck-Anlauf, weil beide Schaltungen auf dem Schild stehen",
-        "In Dreieck, weil 230 V die Wechselstromspannung ist",
-        "Gar nicht, der Motor ist nur für Einphasen-Wechselstrom"
+        "Dauerhaft in Stern (Y) – ein Stern-Dreieck-Anlauf ist an unserem 400-V-Netz NICHT möglich",
+        "Immer mit Stern-Dreieck-Schützschaltung, da der Motor für beide Schaltungen ausgelegt ist",
+        "Dauerhaft in Dreieck (Δ), da im deutschen Niederspannungsnetz 230 V die Strangspannung ist",
+        "Nur an einem 230-V-Einphasennetz mit Steinmetz-Schaltung und vorgeschaltetem Anlaufkondensator"
       ],
       correctIndex: 0,
       explanation: "Die KLEINERE Zahl auf dem Schild (230 V) ist die maximale Spannung, die eine einzelne Wicklung verträgt – NICHT „Einphasen-Wechselstrom“. Im Stern bekommt jede Wicklung 400 V / √3 = 230 V → passt. Im Dreieck läge jede Wicklung direkt an 400 V zwischen zwei Außenleitern → Wicklung brennt durch. Da der Motor im Betrieb im Stern laufen muss, gibt es keinen Stern-Dreieck-Anlauf (er würde ja in Dreieck enden). Typisch für kleine Motoren bis ca. 3 kW.",
@@ -267,10 +267,10 @@ window.ELEKTRO_DATA = {
       fach: "KoSys",
       question: "Wie wählt der Receiver beim Universal-LNB Polarisation und Frequenzband aus?",
       options: [
-        "Über die Kabellänge",
-        "Polarisation über die Speisespannung (ca. 13/14 V vertikal, 18 V horizontal), Band über ein 22-kHz-Signal (an = High-Band)",
-        "Polarisation über das 22-kHz-Signal, Band über die Spannung",
-        "Gar nicht – der LNB gibt immer alles gleichzeitig aus"
+        "Polarisation über die Speisespannung (14 V vertikal, 18 V horizontal), Band über ein 22-kHz-Signal (an = High)",
+        "Polarisation über das 22-kHz-Signal (an = horizontal), Frequenzband über die Speisespannung (14 V = High)",
+        "Polarisation und Band über ein moduliertes DiSEqC-Telegramm, da Gleichspannung nur der LNB-Heizung dient",
+        "Polarisation über den DC-Widerstand der Leitung, Bandumschaltung durch Phasenanschnitt der Versorgungsspannung"
       ],
       correctIndex: 1,
       explanation: "Ein Universal-LNB hat 4 „Ebenen“: vertikal/horizontal × Low/High-Band. Der Receiver schaltet per Fernspeisespannung die Polarisation (13/14 V = vertikal, 18 V = horizontal) und per 22-kHz-Ton das Band (aus = Low, an = High). Ein Single-LNB kann daher nur EINEN Teilnehmer versorgen. Für mehrere Teilnehmer: Quattro-LNB (alle 4 Ebenen fest auf 4 Ausgängen) + Multischalter.",
@@ -284,12 +284,12 @@ window.ELEKTRO_DATA = {
       fach: "KoSys",
       question: "Ein Mehrfamilienhaus soll mit Satellitenempfang für 8 Wohnungen ausgestattet werden. Welche Struktur ist mit einem Multischalter typisch?",
       options: [
-        "Baumstruktur mit Durchgangsdosen in Reihe",
-        "Ringstruktur",
         "Sternstruktur: Von jedem Multischalter-Ausgang führt eine eigene Leitung zu genau einer Teilnehmerdose",
-        "Busstruktur mit 75-Ω-Abschluss an jeder Dose"
+        "Baumstruktur: Alle Teilnehmerdosen werden hintereinander an eine einzige Koax-Stammleitung angeschlossen",
+        "Ringstruktur: Ein geschlossener Koax-Ring versorgt alle Wohnungen bidirektional mit Signalreserven",
+        "Busstruktur: Ein zentraler Verteiler speist Durchgangsdosen mit jeweils integriertem 75-Ω-Abschlusswiderstand"
       ],
-      correctIndex: 2,
+      correctIndex: 0,
       explanation: "Weil jeder Receiver seine Ebene (Polarisation/Band) selbst über Spannung und 22 kHz anwählt, braucht jeder Teilnehmer eine EIGENE Leitung vom Multischalter – Sternstruktur. Der Multischalter bekommt die 4 Ebenen vom Quattro-LNB (bei 2 Satelliten 8 Eingänge + ggf. terrestrisch). Baustelle: Pro Wohnung mindestens 2 Leitungen vorsehen (Twin-Receiver/Aufnahme). Alternative ohne Sternverkabelung: Einkabelsystem (Unicable/JESS).",
       formula: "Multischalter: Ein Ausgang = ein Teilnehmer (Stern)",
       source: "Fachkunde Kap. 12 (Blatt 12.1–12.18)",
@@ -301,12 +301,12 @@ window.ELEKTRO_DATA = {
       fach: "KoSys",
       question: "In einer BK-Anlage (DVB-C, Baumstruktur) bleibt der letzte Ausgang eines Verteilers unbelegt. Was musst du tun?",
       options: [
-        "Nichts, offene Ausgänge sind unkritisch",
-        "Mit einem 75-Ω-Abschlusswiderstand abschließen, um Reflexionen zu vermeiden",
-        "Mit einem 50-Ω-Abschlusswiderstand abschließen",
-        "Mit einem Kurzschlussstecker brücken"
+        "Mit einem 75-Ω-Abschlusswiderstand abschließen, um störende Signalreflexionen zu verhindern",
+        "Offen lassen, da unbeschaltete F-Buchsen bei digitalen DVB-C-Signalen keine Dämpfung erzeugen",
+        "Mit einem 50-Ω-Abschlusswiderstand abschließen, um den Pegel an den anderen Dosen zu erhöhen",
+        "Mit einer F-Kurzschlusskappe brücken, damit keine Hochfrequenzstörungen in die Luft abstrahlen"
       ],
-      correctIndex: 1,
+      correctIndex: 0,
       explanation: "Koaxanlagen in der Rundfunktechnik haben einen Wellenwiderstand von 75 Ω. Ein offener (oder falsch abgeschlossener) Ausgang reflektiert das Signal zurück ins Netz → Geisterbilder, Bitfehler, Klötzchenbildung. Deshalb gehört an jeden freien Verteiler-/Abzweiger-Ausgang und an das Ende einer Durchgangsdosen-Kette ein 75-Ω-Abschlusswiderstand. 50 Ω ist Funk-/Messtechnik, nicht TV.",
       formula: "Wellenwiderstand TV-Koax: Z = 75 Ω → offene Ausgänge mit 75 Ω abschließen",
       source: "Fachkunde Kap. 12 (Blatt 12.1–12.18)",
@@ -395,12 +395,12 @@ window.ELEKTRO_DATA = {
       fach: "GST",
       question: "In welchem Zustand werden Kontakte in Schaltplänen (und in FluidSIM) grundsätzlich gezeichnet?",
       options: [
-        "Im eingeschalteten Betriebszustand",
-        "Im unbetätigten, spannungs- bzw. stromlosen Ruhezustand",
-        "So, wie die Anlage gerade in der Simulation steht",
-        "Öffner im betätigten, Schließer im unbetätigten Zustand"
+        "Im unbetätigten, spannungs- und stromlosen Ruhezustand aller Bauteile",
+        "Im eingeschalteten Normalbetriebszustand unter voller Nennlast der Anlage",
+        "Im gestörten Not-Aus-Zustand mit ausgelöstem Überlastschutzrelais",
+        "In der vom Simulator gewählten beliebigen momentanen Arbeitsstellung"
       ],
-      correctIndex: 1,
+      correctIndex: 0,
       explanation: "Schaltpläne zeigen IMMER den Ruhezustand: kein Taster gedrückt, keine Spule erregt, keine Spannung. Ein Öffner ist dort also geschlossen gezeichnet, ein Schließer offen. Wenn du einen Plan liest, musst du dir den Ablauf im Kopf „vorspielen“: Was passiert, wenn ich -S1 drücke? Häufiger Fehler: Den Plan so zeichnen, wie die Anlage läuft – dann stimmt in der Prüfung jeder Kontakt falsch herum.",
       formula: "Schaltplan = Ruhezustand: unbetätigt + stromlos",
       source: "Fachkunde Kap. 6 (Blatt 6.1–6.14, Schaltungstechnik)",
@@ -412,12 +412,12 @@ window.ELEKTRO_DATA = {
       fach: "GST",
       question: "Ein Öffner (Kontakt 11–12) ist im Schaltplan gezeichnet. Wie verhält er sich?",
       options: [
-        "In Ruhe offen, beim Betätigen geschlossen",
-        "Er schließt erst nach einer einstellbaren Zeit",
-        "Er ist immer geschlossen",
-        "In Ruhe geschlossen, beim Betätigen offen"
+        "In Ruhe geschlossen (leitend), beim Betätigen wird der Kontakt geöffnet",
+        "In Ruhe geöffnet (nichtleitend), beim Betätigen wird der Kontakt geschlossen",
+        "In Ruhe geöffnet, schließt erst zeitverzögert nach Ablauf der eingestellten Relaiszeit",
+        "In Ruhe geschlossen, bleibt auch bei Betätigung dauerhaft mechanisch überbrückt"
       ],
-      correctIndex: 3,
+      correctIndex: 0,
       explanation: "Der Öffner heißt so, weil er beim Betätigen ÖFFNET – in Ruhe ist er also geschlossen und lässt Strom fließen. Funktionsziffern: Öffner enden auf 1–2 (z. B. 11–12, 21–22), Schließer auf 3–4 (13–14, 43–44), Überlastrelais-Öffner 95–96, -Schließer 97–98. Damit erkennst du auch ohne Symbol, um welchen Kontakt es sich handelt.",
       formula: "Öffner: x1–x2 (in Ruhe zu) | Schließer: x3–x4 (in Ruhe offen) | MSR: 95–96 Ö, 97–98 S",
       source: "Fachkunde Kap. 6 (Blatt 6.1–6.14)",
@@ -1304,17 +1304,103 @@ window.ELEKTRO_DATA = {
       id: "ws-03",
       category: "wiso",
       fach: "PuG",
-      question: "Welche Aussage zu den Zweigen der gesetzlichen Sozialversicherung in Deutschland ist richtig?",
+      question: "Welche Aussage zu den 5 Zweigen der gesetzlichen Sozialversicherung in Deutschland ist richtig?",
       options: [
-        "Es gibt 3 Zweige: Kranken-, Renten- und Arbeitslosenversicherung, alle zahlt der Arbeitnehmer allein",
-        "Die Haftpflichtversicherung ist die fünfte Säule der Sozialversicherung",
-        "Es gibt 5 Säulen, die Unfallversicherung zahlt der Arbeitnehmer allein",
-        "Es gibt 5 Säulen: Kranken-, Pflege-, Renten-, Arbeitslosen- und gesetzliche Unfallversicherung. Die Unfallversicherung (für Elektrobetriebe die BG ETEM) zahlt der Arbeitgeber zu 100 % allein"
+        "Unfallversicherung (BG ETEM) zahlt der Arbeitgeber zu 100 %; KV, PV, RV, AV werden paritätisch geteilt",
+        "Alle 5 Säulen (inklusive BG ETEM) werden grundsätzlich genau 50:50 zwischen Betrieb und Azubi aufgeteilt",
+        "Die gesetzliche Unfallversicherung zahlt der Azubi allein, dafür übernimmt die Krankenkasse den vollen Lohn",
+        "Die private Haftpflicht- und Hausratversicherung bildet die gesetzliche fünfte Säule der Sozialversicherung"
       ],
-      correctIndex: 3,
+      correctIndex: 0,
       explanation: "Die 5 Säulen: Krankenversicherung (Krankenkasse), Pflegeversicherung (Pflegekasse), Rentenversicherung (Deutsche Rentenversicherung), Arbeitslosenversicherung (Bundesagentur für Arbeit) und gesetzliche Unfallversicherung (Berufsgenossenschaften). Die ersten vier werden grundsätzlich je zur Hälfte von Arbeitgeber und Arbeitnehmer getragen (Ausnahmen: z. B. Kinderlosenzuschlag in der Pflegeversicherung trägt der Arbeitnehmer). Die Unfallversicherung zahlt der Arbeitgeber allein – sie übernimmt im Gegenzug seine Haftung bei Arbeits- und Wegeunfällen sowie Berufskrankheiten. Für Elektrobetriebe zuständig ist die BG ETEM, die auch die DGUV Vorschrift 3 (Prüfung elektrischer Anlagen und Betriebsmittel) herausgibt. Ein Arbeitsunfall muss bei mehr als 3 Tagen Arbeitsunfähigkeit gemeldet werden.",
       formula: "KV + PV + RV + AV: AG/AN je ca. ½ | UV (BG ETEM): AG 100 %",
       source: "SGB IV, V, VI, VII, XI, III · BG ETEM · ISB Politik und Gesellschaft",
+      isWeakSpot: false
+    },
+    // ───────────────────────── 10. RECHENFORMELN & ELEKTRO-MATHE ─────────────────────────
+    {
+      id: "calc-01",
+      category: "elektronik_digital",
+      fach: "SG",
+      question: "Welche Formel beschreibt den Zusammenhang zwischen Ladung Q, Kapazität C und Spannung U an einem Kondensator?",
+      options: [
+        "Q = C · U (Einheit: As bzw. Coulomb; Verdopplung der Spannung verdoppelt die gespeicherte Ladung)",
+        "Q = C / U (Einheit: Farad pro Volt; die Ladung sinkt mit steigender Ladespannung)",
+        "Q = U / C (Einheit: Volt pro Farad; die Ladung hängt nur vom dielektrischen Widerstand ab)",
+        "Q = 0,5 · C · U² (Einheit: Joule bzw. Ws; beschreibt die gesamte im Feld gespeicherte Energie W)"
+      ],
+      correctIndex: 0,
+      explanation: "Die elektrische Ladung Q ist das Produkt aus Kapazität C (in Farad = As/V) und anliegender Spannung U: Q = C · U. Doppelte Spannung = doppelte Ladung. Die Formel W = 0,5 · C · U² beschreibt hingegen die gespeicherte Energie in Ws (Joule). Auf der Baustelle: Große Glättungs- oder USV-Kondensatoren können auch nach dem Freischalten noch gefährlich hohe Ladungen speichern (Entladewiderstand prüfen!).",
+      formula: "Q = C · U [As = C]  |  W = 0,5 · C · U² [Ws = J]",
+      source: "Fachkunde Kap. 5 (Kondensator im Gleichstromkreis)",
+      isWeakSpot: false
+    },
+    {
+      id: "calc-02",
+      category: "elektronik_digital",
+      fach: "SG",
+      question: "Mit welcher Formel berechnet man den Blindwiderstand X_C eines Kondensators an Wechselspannung und wie wirkt doppelte Frequenz?",
+      options: [
+        "X_C = 1 / (2 · π · f · C) – bei Frequenzverdopplung halbiert sich der kapazitive Blindwiderstand",
+        "X_C = 2 · π · f · C – bei Frequenzverdopplung verdoppelt sich der Blindwiderstand analog zur Spule",
+        "X_C = 2 · π · f / C – der Blindwiderstand steigt linear mit der Frequenz und sinkt mit der Kapazität",
+        "X_C = √(R² + (1 / ωC)²) – der Blindwiderstand hängt primär vom ohmschen Verlustwiderstand ab"
+      ],
+      correctIndex: 0,
+      explanation: "Der kapazitive Blindwiderstand verhält sich umgekehrt proportional zur Frequenz: X_C = 1 / (2 · π · f · C). Je höher die Frequenz, desto leichter kann der Wechselstrom den Kondensator „umladen“, der Blindwiderstand sinkt also. Bei Gleichstrom (f = 0 Hz) ist X_C unendlich groß (Gleichstromsperre). Bei doppelter Frequenz (z. B. 100 Hz statt 50 Hz) halbiert sich X_C.",
+      formula: "X_C = 1 / (2 · π · f · C) = 1 / (ω · C) [Ω]  |  f ↑ ⇒ X_C ↓",
+      source: "Fachkunde Kap. 8 (Wechselstromkreis, Blindwiderstände)",
+      isWeakSpot: false
+    },
+    {
+      id: "calc-03",
+      category: "energie_gebaeude",
+      fach: "IE",
+      question: "Mit welcher Formel berechnet man die erforderliche Kondensatorleistung Q_C zur Blindleistungskompensation von cos φ1 auf cos φ2?",
+      options: [
+        "Q_C = P · (tan φ1 − tan φ2) – Differenz der Tangenswerte multipliziert mit der Wirkleistung P",
+        "Q_C = S · (cos φ1 − cos φ2) – Differenz der Wirkfaktoren multipliziert mit der Scheinleistung S",
+        "Q_C = P · (sin φ1 / sin φ2) – Verhältnis der Sinuswerte multipliziert mit der Grundlast P",
+        "Q_C = √(S² − P²) · cos φ2 – geometrische Scheinleistung abzüglich des Ziel-Wirkleistungsfaktors"
+      ],
+      correctIndex: 0,
+      explanation: "Kompensationskondensatoren liefern kapazitive Blindleistung, um die induktive Blindleistung von Motoren und Transformatoren auszugleichen. Aus dem Leistungsdreieck gilt: Q = P · tan φ. Die benötigte Kondensatorleistung ist die Differenz: Q_C = Q1 − Q2 = P · (tan φ1 − tan φ2). Ziel in Gewerbebetrieben ist meist cos φ ≈ 0,90 bis 0,95 ind., um Blindstrom-Strafgebühren des Energieversorgers zu vermeiden.",
+      formula: "Q_C = P · (tan φ1 − tan φ2) [kvar]  |  Ziel: cos φ ≥ 0,90",
+      source: "Fachkunde Kap. 8 & 14 (Blindleistungskompensation)",
+      isWeakSpot: false
+    },
+    {
+      id: "calc-04",
+      category: "drehstrom_motoren",
+      fach: "IE",
+      question: "Welche Formel berechnet die Wirkleistung P in einem symmetrisch belasteten Drehstromnetz (Außenleiterspannung U, Leiterstrom I)?",
+      options: [
+        "P = √3 · U · I · cos φ (Wirkleistung in Watt; berücksichtigt Leiter-Verkettung und Phasenwinkel)",
+        "P = √3 · U · I (das ist die elektrische Scheinleistung S in VA bei symmetrischer Dreiphasenlast)",
+        "P = √3 · U · I · sin φ (das ist die induktive oder kapazitive Blindleistung Q in var bzw. kvar)",
+        "P = 3 · U · I · cos φ (gilt nur, wenn U als Strangspannung 230 V statt Außenleiterspannung eingesetzt wird)"
+      ],
+      correctIndex: 0,
+      explanation: "Bei Drehstrom mit Außenleiterspannung U (400 V) und Außenleiterstrom I gilt immer der Verkettungsfaktor √3 ≈ 1,732: Wirkleistung P = √3 · U · I · cos φ (Einheit Watt / kW). Scheinleistung S = √3 · U · I (Einheit VA / kVA). Blindleistung Q = √3 · U · I · sin φ (Einheit var / kvar). Rechnet man mit der Strangspannung (230 V), lautet die Formel P = 3 · U_Str · I_Str · cos φ.",
+      formula: "P = √3 · U · I · cos φ [W]  |  S = √3 · U · I [VA]  |  Q = √3 · U · I · sin φ [var]",
+      source: "Fachkunde Kap. 7 (Drehstromleistung)",
+      isWeakSpot: false
+    },
+    {
+      id: "calc-05",
+      category: "leitungsberechnung",
+      fach: "IE",
+      question: "Mit welcher Formel berechnest du den Leitungsspannungsfall ΔU auf einer symmetrischen Drehstromleitung (Kupfer, γ = 56 m/(Ω·mm²))?",
+      options: [
+        "ΔU = (√3 · l · I · cos φ) / (γ · A) – mit einfacher Leitungslänge l und Verkettungsfaktor √3",
+        "ΔU = (2 · l · I · cos φ) / (γ · A) – mit doppelter Leitungslänge für Einphasen-Wechselstrom (Hin+Rück)",
+        "ΔU = (l · I) / (γ · A · √3) – fehlerhafte Formel ohne Berücksichtigung des Wirkfaktors",
+        "ΔU = (3 · l · I · cos φ) / (2 · γ · A) – Näherungsformel mit asymmetrischem Rückleiterabgriff"
+      ],
+      correctIndex: 0,
+      explanation: "Bei Drehstrom hebt sich der Rückstrom im Neutralleiter bei symmetrischer Last auf. Daher geht in die Formel nur der Verkettungsfaktor √3 ein: ΔU = (√3 · l · I · cos φ) / (γ · A). Bei Wechselstrom (1~ 230 V) fließt der Strom hin und zurück, daher steht dort der Faktor 2. Nach DIN VDE 0100-520 darf der Spannungsfall vom Zähler bis zum Verbraucher maximal 3 % (Beleuchtung/Steckdosen) bzw. nach NAV maximal 0,5 % im Hauptstromsystem betragen.",
+      formula: "ΔU_3~ = (√3 · l · I · cos φ) / (γ · A)  |  ΔU_1~ = (2 · l · I · cos φ) / (γ · A)",
+      source: "Fachkunde Kap. 10 & DIN VDE 0100-520 (Spannungsfall)",
       isWeakSpot: false
     }
   ],

@@ -713,8 +713,163 @@ body {
   max-width: 600px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 4px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2px;
+}
+
+/* Runden-Abschluss & Gamification */
+.quiz-summary-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px 18px;
+  text-align: center;
+  animation: fadeIn 0.25s ease-out;
+}
+
+.summary-badge-icon {
+  font-size: 3rem;
+  margin-bottom: 8px;
+  filter: drop-shadow(0 4px 12px rgba(245, 158, 11, 0.3));
+}
+
+.summary-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.summary-kpi {
+  background: #090d16;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  padding: 10px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.summary-kpi small {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+/* Baustellen-Mathe Trainer */
+.math-trainer-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+}
+
+.math-modes-nav {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin-bottom: 16px;
+  padding-bottom: 4px;
+}
+.math-modes-nav::-webkit-scrollbar { display: none; }
+
+.math-mode-pill {
+  flex: 0 0 auto;
+  background: #0f172a;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.math-mode-pill.active {
+  background: rgba(16, 185, 129, 0.18);
+  color: var(--accent-emerald);
+  border-color: var(--accent-emerald);
+}
+
+.math-question-title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  line-height: 1.4;
+  margin-bottom: 4px;
+  color: #f8fafc;
+}
+
+.math-options-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.math-opt-btn {
+  background: #0f172a;
+  border: 1.5px solid #263554;
+  border-radius: 12px;
+  color: #f8fafc;
+  padding: 14px 10px;
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.12s;
+  text-align: center;
+}
+
+.math-opt-btn:hover:not(:disabled) {
+  border-color: var(--accent-blue);
+  background: #16223b;
+}
+
+.math-opt-btn.correct {
+  background: rgba(16, 185, 129, 0.22);
+  border-color: var(--accent-emerald);
+  color: #6ee7b7;
+}
+
+.math-opt-btn.wrong {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: var(--accent-red);
+  color: #fca5a5;
+}
+
+.math-feedback {
+  background: #090d16;
+  border-radius: 12px;
+  padding: 14px;
+  margin-top: 10px;
+  border-left: 4px solid #23314f;
+}
+
+.math-feedback.success { border-left-color: var(--accent-emerald); }
+.math-feedback.fail { border-left-color: var(--accent-red); }
+
+.math-trick-box {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: #cbd5e1;
+}
+
+.math-summary-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px 18px;
+  text-align: center;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .nav-btn {

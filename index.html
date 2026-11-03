@@ -24,6 +24,7 @@
         </div>
       </div>
       <div class="header-stats">
+        <div class="stat-chip" id="stat-rank" title="Azubi-Rang">🪛 1. Lehrjahr</div>
         <div class="stat-chip" title="Lern-XP">✨ <span id="stat-xp">0</span> XP</div>
         <div class="stat-chip" title="Sitzt sicher (Box 3–4)">🏆 <span id="stat-mastered">0</span></div>
       </div>
@@ -61,12 +62,16 @@
             <small>Box 3+: Sitzt sicher</small>
           </div>
         </div>
+        <div id="hero-rank-display"></div>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;">
           <button class="btn-primary" onclick="ElektroApp.startQuizMode('weak')">
             🎯 Akute Wackel-Themen trainieren
           </button>
           <button class="btn-secondary" onclick="ElektroApp.startQuizMode('quick10')">
             ☕ 5-Minuten-Vesperpause (10 Fragen)
+          </button>
+          <button class="btn-secondary" onclick="ElektroApp.switchTab('math')">
+            🧮 Baustellen-Mathe & Kopfrechnen
           </button>
           <button class="btn-secondary" onclick="ElektroApp.switchTab('sim')">
             🔌 Zum Klemmbrett- & FluidSIM-Labor
@@ -121,12 +126,26 @@
       <div id="quiz-container"></div>
     </section>
 
-    <!-- TAB 3: INTERAKTIVES PRAXIS-LABOR (KLEMMBRETT, FLUIDSIM, dB) -->
+    <!-- TAB 3: BAUSTELLEN-MATHE & KOPFRECHNEN -->
+    <section id="tab-math" class="tab-panel">
+      <div class="section-card">
+        <div class="section-header">
+          <h2>🧮 Baustellen-Mathe & Kopfrechen-Trainer</h2>
+          <span class="badge badge-emerald">Routine & Hacks</span>
+        </div>
+        <p style="font-size:0.83rem;color:var(--text-muted);margin-bottom:14px;">
+          Lerne krasse Rechentricks (wie 989 : 12, ×15, ×25), trainiere das 1×1 und meistere Maße & Zuschnitt im Schlaf.
+        </p>
+        <div id="math-trainer-container"></div>
+      </div>
+    </section>
+
+    <!-- TAB 4: INTERAKTIVES PRAXIS-LABOR (KLEMMBRETT, FLUIDSIM, dB) -->
     <section id="tab-sim" class="tab-panel">
       <div id="simulators-container"></div>
     </section>
 
-    <!-- TAB 4: SPICKZETTEL & BAUSTELLEN-RECHNER -->
+    <!-- TAB 5: SPICKZETTEL & BAUSTELLEN-RECHNER -->
     <section id="tab-cheats" class="tab-panel">
       <div class="section-card">
         <div class="section-header">
@@ -151,20 +170,25 @@
       </button>
       <button class="nav-btn" data-tab="quiz" onclick="ElektroApp.switchTab('quiz')">
         <span class="nav-icon">🎯</span>
-        <span>Prüfungs-Drill</span>
+        <span>Drill</span>
+      </button>
+      <button class="nav-btn" data-tab="math" onclick="ElektroApp.switchTab('math')">
+        <span class="nav-icon">🧮</span>
+        <span>Mathe</span>
       </button>
       <button class="nav-btn" data-tab="sim" onclick="ElektroApp.switchTab('sim')">
         <span class="nav-icon">🔌</span>
-        <span>Praxis-Labor</span>
+        <span>Labor</span>
       </button>
       <button class="nav-btn" data-tab="cheats" onclick="ElektroApp.switchTab('cheats')">
         <span class="nav-icon">📐</span>
-        <span>Spickzettel</span>
+        <span>Spicker</span>
       </button>
     </div>
   </nav>
 
   <script src="js/data.js"></script>
+  <script src="js/math_trainer.js"></script>
   <script src="js/simulators.js"></script>
   <script src="js/app.js"></script>
 </body>
