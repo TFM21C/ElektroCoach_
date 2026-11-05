@@ -151,6 +151,10 @@ window.ElektroApp = (function () {
     updateCountdown();
     renderHeaderStats();
 
+    if (window.ElektroStudyPlaner) {
+      window.ElektroStudyPlaner.renderHeroBanner('study-plan-hero');
+    }
+
     const total = data.questions.length;
     let weakCount = 0;
     let learningCount = 0;
@@ -247,6 +251,9 @@ window.ElektroApp = (function () {
     if (filter === 'weak') {
       pool = base.filter(q => (state.boxes[q.id] || 2) === 1 || q.isWeakSpot);
       if (pool.length === 0) pool = [...base];
+    } else if (filter === 'retro') {
+      pool = base.filter(q => q.isRetro || (q.lehrjahr && q.lehrjahr <= 2));
+      if (pool.length === 0) pool = data.questions.filter(q => q.isRetro || (q.lehrjahr && q.lehrjahr <= 2));
     } else if (filter === 'quick10') {
       // Priorisiere Box 1 und 2, schließe bereits in dieser Session gelernte aus falls genug übrig
       let available = base.filter(q => !excludeIds.includes(q.id));
@@ -263,6 +270,22 @@ window.ElektroApp = (function () {
 
     // Sortiere so, dass schwächere Fragen zuerst drankommen
     pool.sort((a, b) => (state.boxes[a.id] || 2) - (state.boxes[b.id] || 2));
+
+    // Proaktiver Retro-Drill: Streue bei normalen Runden (nicht im reinen Retro-Modus) alle 4 Fragen eine Frage aus LJ 1/2 ein!
+    if (filter !== 'retro' && pool.length >= 4) {
+      const retroPool = data.questions.filter(q => q.isRetro || (q.lehrjahr && q.lehrjahr <= 2));
+      if (retroPool.length > 0) {
+        for (let pos = 3; pos < pool.length; pos += 4) {
+          if (!pool[pos].isRetro) {
+            const randRetro = retroPool[Math.floor(Math.random() * retroPool.length)];
+            if (!pool.slice(0, pos).some(q => q.id === randRetro.id)) {
+              pool.splice(pos, 0, randRetro);
+            }
+          }
+        }
+      }
+    }
+
     state.quizQueue = pool;
     state.quizIndex = 0;
     state.answeredCurrent = false;
@@ -288,6 +311,7 @@ window.ElektroApp = (function () {
     const filters = [
       { id: 'weak', label: '🎯 Wackel-Themen (Box 1)' },
       { id: 'quick10', label: '☕ 10er Vesperpause' },
+      { id: 'retro', label: '⚠️ Retro-Check (1./2. LJ)' },
       { id: 'all', label: `Alle (${questionsInFach().length})` },
       ...data.categories.map(c => ({ id: c.id, label: `${c.icon} ${c.shortTitle}` }))
     ];
@@ -414,6 +438,7 @@ window.ElektroApp = (function () {
             <span class="badge badge-blue">${cat ? `${cat.icon} ${cat.title}` : q.category}</span>
             <span class="badge ${boxInfo.cls}">${boxInfo.text}</span>
             ${q.isWeakSpot ? `<span class="badge badge-red">⚡ Fokus-Thema</span>` : ''}
+            ${q.isRetro ? `<span class="badge" style="background:#dc2626;color:#fff;font-weight:800;">⚠️ RETRO-CHECK (LJ ${q.lehrjahr || '1/2'})</span>` : ''}
           </div>
           <div class="quiz-card-meta">
             ${q.fach ? `<span class="fach-badge fach-${q.fach}" title="${(FAECHER.find(f => f.id === q.fach) || {}).title || ''}">${q.fach}</span>` : ''}
@@ -663,6 +688,22 @@ window.ElektroApp = (function () {
     }
   }
 
+  function switchCheatsSubtab(subId) {
+    state.cheatsSubtab = subId;
+    ['cheats', 'tools', 'lehrplan'].forEach(id => {
+      const btn = document.getElementById(`btn-sub-${id}`);
+      if (btn) btn.classList.toggle('active', id === subId);
+      const content = document.getElementById(`subtab-content-${id}`);
+      if (content) content.style.display = (id === subId) ? 'block' : 'none';
+    });
+    if (subId === 'tools' && window.ElektroTools) {
+      window.ElektroTools.renderToolsGuide('tools-guide-container');
+    }
+    if (subId === 'lehrplan' && window.ElektroStudyPlaner) {
+      window.ElektroStudyPlaner.renderLehrplanExplorer('lehrplan-container');
+    }
+  }
+
   function switchTab(tabId) {
     state.activeTab = tabId;
     document.querySelectorAll('.tab-panel').forEach(el => {
@@ -677,10 +718,14 @@ window.ElektroApp = (function () {
     if (tabId === 'sim' && window.ElektroSimulators) {
       window.ElektroSimulators.renderAll('simulators-container');
     }
-    if (tabId === 'math' && window.ElektroMathTrainer) {
-      window.ElektroMathTrainer.render();
+    if (tabId === 'math') {
+      if (window.ElektroMathScaffold) window.ElektroMathScaffold.render('math-scaffold-container');
+      if (window.ElektroMathTrainer) window.ElektroMathTrainer.render();
     }
-    if (tabId === 'cheats') renderCalculatorsAndCheats();
+    if (tabId === 'cheats') {
+      renderCalculatorsAndCheats();
+      switchCheatsSubtab(state.cheatsSubtab || 'cheats');
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -696,10 +741,14 @@ window.ElektroApp = (function () {
     if (window.ElektroSimulators) {
       window.ElektroSimulators.renderAll('simulators-container');
     }
+    if (window.ElektroMathScaffold) {
+      window.ElektroMathScaffold.render('math-scaffold-container');
+    }
     if (window.ElektroMathTrainer) {
       window.ElektroMathTrainer.init();
     }
     renderCalculatorsAndCheats();
+    switchCheatsSubtab('cheats');
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -710,6 +759,7 @@ window.ElektroApp = (function () {
 
   return {
     switchTab,
+    switchCheatsSubtab,
     startQuizMode,
     setFachFilter,
     answerQuestion,

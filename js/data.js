@@ -1402,8 +1402,346 @@ window.ELEKTRO_DATA = {
       formula: "ΔU_3~ = (√3 · l · I · cos φ) / (γ · A)  |  ΔU_1~ = (2 · l · I · cos φ) / (γ · A)",
       source: "Fachkunde Kap. 10 & DIN VDE 0100-520 (Spannungsfall)",
       isWeakSpot: false
+    },
+
+    // ═════════════ RETRO: GP-TEIL-1-STOFF (1. & 2. LEHRJAHR, LF 1–8) ═════════════
+    {
+      id: "retro_1",
+      category: "schutz_vde",
+      fach: "IE",
+      isRetro: true,
+      lehrjahr: 1,
+      question: "In welcher Reihenfolge sind die 5 Sicherheitsregeln nach DIN VDE 0105-100 vor Arbeitsbeginn anzuwenden?",
+      options: [
+        "Freischalten → gegen Wiedereinschalten sichern → Spannungsfreiheit feststellen → erden und kurzschließen → benachbarte, unter Spannung stehende Teile abdecken oder abschranken",
+        "Freischalten → Spannungsfreiheit feststellen → gegen Wiedereinschalten sichern → benachbarte Teile abdecken → erden und kurzschließen",
+        "Spannungsfreiheit feststellen → freischalten → erden und kurzschließen → gegen Wiedereinschalten sichern → benachbarte Teile abdecken",
+        "Freischalten → erden und kurzschließen → Spannungsfreiheit feststellen → gegen Wiedereinschalten sichern → benachbarte Teile abdecken"
+      ],
+      correctIndex: 0,
+      explanation: "Die Reihenfolge ist verbindlich: 1. Freischalten, 2. gegen Wiedereinschalten sichern (Schloss, Schild, Sicherungseinsatz mitnehmen), 3. Spannungsfreiheit allpolig feststellen, 4. erden und kurzschließen, 5. benachbarte, unter Spannung stehende Teile abdecken oder abschranken. Erst sichern, dann messen – sonst schaltet dir zwischen Messen und Anfassen jemand den Kreis wieder zu. Und erden erst NACH dem Feststellen der Spannungsfreiheit, sonst legst du die Erdungsgarnitur auf einen aktiven Leiter.",
+      formula: "Freischalten → Sichern → Feststellen → Erden & Kurzschließen → Abdecken",
+      source: "GP Teil 1 / Fachkunde Kap. 1 (Arbeitssicherheit, DIN VDE 0105-100)",
+      isWeakSpot: false
+    },
+    {
+      id: "retro_2",
+      category: "schutz_vde",
+      fach: "IE",
+      isRetro: true,
+      lehrjahr: 2,
+      question: "Du setzt eine Erdungs- und Kurzschließvorrichtung an einer freigeschalteten Anlage. Wie gehst du richtig vor?",
+      options: [
+        "Zuerst alle Außenleiter miteinander kurzschließen und danach die Verbindung zur Erde herstellen",
+        "Zuerst die Vorrichtung mit der Erdungsanlage verbinden, danach an die zu erdenden Leiter anschließen",
+        "Zuerst die Vorrichtung an die Außenleiter klemmen und danach die Erdverbindung herstellen",
+        "Die Reihenfolge ist beliebig, solange die Spannungsfreiheit vorher festgestellt wurde"
+      ],
+      correctIndex: 1,
+      explanation: "Immer erst erden, dann kurzschließen: Die Garnitur wird zuerst an der Erdungsanlage (Erdungspunkt/PE-Schiene) angeschlossen und erst danach mit der Erdungsstange an die Leiter gelegt. Steht wider Erwarten doch Spannung an (Rückspeisung, PV, Notstromaggregat), löst die Schutzeinrichtung aus, ohne dass Strom über dich fließt. Beim Entfernen genau umgekehrt: erst von den Leitern, zuletzt von der Erde.",
+      source: "GP Teil 1 / Fachkunde Kap. 1 (DIN VDE 0105-100, 4. Sicherheitsregel)",
+      isWeakSpot: false
+    },
+    {
+      id: "retro_3",
+      category: "elektronik_digital",
+      fach: "SG",
+      isRetro: true,
+      lehrjahr: 1,
+      question: "Ein Heizlüfter nimmt an 230 V eine Leistung von 2000 W auf. Wie groß sind der Strom und der Widerstand der Heizwendel (betriebswarm)?",
+      options: [
+        "I ≈ 4,3 A und R ≈ 53,5 Ω",
+        "I ≈ 8,7 A und R ≈ 115 Ω",
+        "I ≈ 8,7 A und R ≈ 26,5 Ω",
+        "I ≈ 0,1 A und R ≈ 2300 Ω"
+      ],
+      correctIndex: 2,
+      explanation: "I = P / U = 2000 W / 230 V ≈ 8,7 A. Danach mit dem Ohmschen Gesetz: R = U / I = 230 V / 8,7 A ≈ 26,5 Ω (oder direkt R = U² / P). Praxis: Ein 2-kW-Heizlüfter belastet einen 16-A-Kreis schon zur Hälfte – kommt noch ein Wasserkocher an dieselbe Mehrfachdose, fliegt der LS. Kalt gemessen zeigt das Multimeter übrigens weniger Ohm, weil der Widerstand der Heizwendel mit der Temperatur steigt.",
+      formula: "I = P / U  |  R = U / I = U² / P",
+      source: "GP Teil 1 / Fachkunde Kap. 2 (Ohmsches Gesetz, elektrische Leistung)",
+      isWeakSpot: false
+    },
+    {
+      id: "retro_4",
+      category: "elektronik_digital",
+      fach: "SG",
+      isRetro: true,
+      lehrjahr: 1,
+      question: "Ein unbelasteter Spannungsteiler aus R1 = 1 kΩ (oben) und R2 = 3 kΩ (unten) liegt an 24 V DC. Welche Spannung misst du an R2?",
+      options: [
+        "6 V, weil R2 dreimal so groß ist und deshalb nur ein Viertel der Spannung abbekommt",
+        "8 V, weil sich die Gesamtspannung im Verhältnis 1 : 3 auf drei Teile verteilt",
+        "12 V, weil sich die Spannung bei einer Reihenschaltung immer halbiert",
+        "18 V, weil am größeren Widerstand der größere Spannungsanteil abfällt"
+      ],
+      correctIndex: 3,
+      explanation: "In der Reihenschaltung fließt durch beide Widerstände derselbe Strom, also fällt am größeren Widerstand die größere Spannung ab: U2 = U · R2 / (R1 + R2) = 24 V · 3 kΩ / 4 kΩ = 18 V, an R1 bleiben 6 V. Merke: Die Teilspannungen verhalten sich wie die Widerstände. Achtung in der Praxis: Hängst du eine Last an R2, sinkt U2 – der belastete Spannungsteiler taugt deshalb nicht als Netzteil-Ersatz.",
+      formula: "U2 = U · R2 / (R1 + R2)  |  U1 : U2 = R1 : R2",
+      source: "GP Teil 1 / Fachkunde Kap. 2 (Reihenschaltung, Spannungsteiler)",
+      isWeakSpot: false
+    },
+    {
+      id: "retro_5",
+      category: "schutz_vde",
+      fach: "IE",
+      isRetro: true,
+      lehrjahr: 1,
+      question: "Welche Aderfarben sind nach DIN VDE 0293-308 (HD 308) in einer 5-adrigen Drehstrom-Mantelleitung (z. B. NYM-J 5×2,5) vorgesehen?",
+      options: [
+        "L1 schwarz, L2 braun, L3 grau, N grün-gelb, PE blau",
+        "L1 braun, L2 schwarz, L3 grau, N blau, PE grün-gelb",
+        "L1 braun, L2 blau, L3 schwarz, N grau, PE grün-gelb",
+        "L1 rot, L2 gelb, L3 blau, N schwarz, PE grün-gelb"
+      ],
+      correctIndex: 1,
+      explanation: "Standard nach HD 308: braun – schwarz – grau für L1, L2, L3, blau für den Neutralleiter, grün-gelb ausschließlich für den Schutzleiter (PE/PEN). Grün-gelb darf NIE als aktiver Leiter verwendet werden, auch nicht als Notlösung. Blau darf nur dann als Außenleiter genutzt werden, wenn kein N gebraucht wird – dann gehört die Ader an beiden Enden dauerhaft gekennzeichnet (z. B. braunes Isolierband/Markierer). Rot-gelb-blau ist die alte Farbgebung aus Altanlagen.",
+      formula: "L1 braun | L2 schwarz | L3 grau | N blau | PE grün-gelb",
+      source: "GP Teil 1 / Fachkunde Kap. 4 (Leitungen, DIN VDE 0293-308)",
+      isWeakSpot: false
+    },
+    {
+      id: "retro_6",
+      category: "schutz_vde",
+      fach: "IE",
+      isRetro: true,
+      lehrjahr: 2,
+      question: "Wodurch unterscheidet sich PELV von SELV?",
+      options: [
+        "PELV darf auf der Sekundärseite geerdet sein, SELV ist ungeerdet – beide haben eine sichere Trennung zum Netz",
+        "PELV hat keine sichere Trennung zum Netz, SELV dagegen schon – beide sind auf der Sekundärseite ungeerdet",
+        "PELV ist bis 120 V AC erlaubt, SELV nur bis 50 V DC – beide sind sekundärseitig immer geerdet",
+        "PELV wird nur in Schutzklasse I eingesetzt, SELV nur in Schutzklasse II – die Erdung spielt keine Rolle"
+      ],
+      correctIndex: 0,
+      explanation: "SELV und PELV sind beide Schutzkleinspannung (≤ 50 V AC / ≤ 120 V DC) mit sicherer Trennung, z. B. über einen Sicherheitstransformator nach DIN EN 61558-2-6. Bei SELV ist der Sekundärkreis erdfrei, bei PELV darf er geerdet sein – typisch bei 24-V-Steuerungen im Schaltschrank, wo der 0-V-Leiter auf PE gelegt wird. FELV ist dagegen nur Funktionskleinspannung OHNE sichere Trennung: Dort gilt die Schutzmaßnahme der Primärseite, sie zählt nicht als Schutz durch Kleinspannung.",
+      source: "GP Teil 1 / Fachkunde Kap. 5 (Schutz durch Kleinspannung, DIN VDE 0100-410)",
+      isWeakSpot: false
+    },
+    {
+      id: "retro_7",
+      category: "schutz_vde",
+      fach: "SG",
+      isRetro: true,
+      lehrjahr: 1,
+      question: "Eine Bohrmaschine trägt das Symbol „Quadrat im Quadrat“ und hat einen zweipoligen Stecker ohne Schutzkontakt. Welche Schutzklasse liegt vor und worauf beruht der Schutz?",
+      options: [
+        "Schutzklasse I – Schutz durch Anschluss des Gehäuses an den Schutzleiter",
+        "Schutzklasse III – Schutz durch Betrieb mit Schutzkleinspannung",
+        "Schutzklasse 0 – Schutz allein durch die Basisisolierung ohne Zusatzmaßnahme",
+        "Schutzklasse II – Schutz durch doppelte oder verstärkte Isolierung"
+      ],
+      correctIndex: 3,
+      explanation: "Das doppelte Quadrat steht für Schutzklasse II (Schutzisolierung): Doppelte oder verstärkte Isolierung verhindert, dass berührbare Teile im Fehlerfall Spannung annehmen – ein Schutzleiter ist weder nötig noch angeschlossen. Schutzklasse I erkennst du am Erdungszeichen und Schutzkontaktstecker (PE ans Gehäuse), Schutzklasse III am Rauten-Symbol mit „III“ (Betrieb an SELV/PELV). Bei der Geräteprüfung entfällt bei SK II die Schutzleitermessung, dafür wird der Ersatzableit- bzw. Berührungsstrom gemessen.",
+      source: "GP Teil 1 / Fachkunde Kap. 5 (Schutzklassen, DIN EN 61140)",
+      isWeakSpot: false
+    },
+    {
+      id: "retro_8",
+      category: "schutz_vde",
+      fach: "SG",
+      isRetro: true,
+      lehrjahr: 2,
+      question: "Bei der Wiederholungsprüfung nach DIN VDE 0701-0702 misst du an einem Gerät der Schutzklasse I mit 5 m Anschlussleitung den Schutzleiterwiderstand. Welcher Grenzwert gilt?",
+      options: [
+        "R_PE ≤ 1 MΩ",
+        "R_PE ≤ 0,3 Ω",
+        "R_PE ≤ 3 Ω",
+        "R_PE ≤ 30 Ω"
+      ],
+      correctIndex: 1,
+      explanation: "Für Anschlussleitungen bis 5 m gilt R_PE ≤ 0,3 Ω. Für jede weiteren 7,5 m Leitung kommen 0,1 Ω dazu, insgesamt höchstens 1 Ω. Gemessen wird zwischen Schutzkontakt des Steckers und berührbaren, leitfähigen Gehäuseteilen – dabei die Leitung über die ganze Länge abschnittsweise bewegen, um Aderbrüche in der Knickstelle zu finden. 1 MΩ ist dagegen der typische Mindestwert für den Isolationswiderstand.",
+      formula: "R_PE ≤ 0,3 Ω (bis 5 m) + 0,1 Ω je weitere 7,5 m, max. 1 Ω",
+      source: "GP Teil 1 / Fachkunde Kap. 6 (Geräteprüfung DIN VDE 0701-0702)",
+      isWeakSpot: false
+    },
+    {
+      id: "retro_9",
+      category: "schutz_vde",
+      fach: "IE",
+      isRetro: true,
+      lehrjahr: 2,
+      question: "Bei der Erstprüfung einer 230/400-V-Anlage misst du den Isolationswiderstand eines Endstromkreises. Welche Messgleichspannung und welcher Mindestwert gelten nach DIN VDE 0100-600?",
+      options: [
+        "250 V DC und R_ISO ≥ 0,5 MΩ",
+        "1000 V DC und R_ISO ≥ 0,5 MΩ",
+        "500 V DC und R_ISO ≥ 1 MΩ",
+        "230 V AC und R_ISO ≥ 1 kΩ"
+      ],
+      correctIndex: 2,
+      explanation: "Stromkreise bis 500 V Nennspannung (also unser 230/400-V-Netz) werden mit 500 V DC geprüft, der Mindestwert liegt bei 1 MΩ. Vor der Messung: Verbraucher abklemmen oder Leuchtmittel herausdrehen, elektronische Geräte (Dimmer, Bewegungsmelder, Überspannungsschutz) abtrennen – die Prüfspannung kann sie zerstören bzw. verfälscht das Ergebnis. In der Praxis liegen neue Anlagen meist bei mehreren hundert MΩ; ein Wert knapp über 1 MΩ ist ein Warnsignal (Feuchte in der Dose, gequetschte Leitung).",
+      formula: "U_N ≤ 500 V → U_Prüf = 500 V DC, R_ISO ≥ 1 MΩ",
+      source: "GP Teil 1 / Fachkunde Kap. 6 (Erstprüfung DIN VDE 0100-600)",
+      isWeakSpot: false
+    },
+    {
+      id: "retro_10",
+      category: "schutz_vde",
+      fach: "IE",
+      isRetro: true,
+      lehrjahr: 2,
+      question: "Ein Steckdosen-Endstromkreis (16 A, 230 V) im TN-S-System wird über einen RCD Typ A geschützt. Welcher Bemessungsdifferenzstrom ist vorgeschrieben und welche maximale Abschaltzeit gilt für den Fehlerschutz?",
+      options: [
+        "I_ΔN ≤ 30 mA und t_a ≤ 0,4 s",
+        "I_ΔN ≤ 300 mA und t_a ≤ 5 s",
+        "I_ΔN ≤ 30 mA und t_a ≤ 5 s",
+        "I_ΔN ≤ 10 mA und t_a ≤ 0,2 s"
+      ],
+      correctIndex: 0,
+      explanation: "Steckdosen bis 32 A für Laien brauchen nach DIN VDE 0100-410 einen zusätzlichen Schutz durch RCD mit I_ΔN ≤ 30 mA. Für Endstromkreise bis 32 A im TN-System bei 230 V gilt eine maximale Abschaltzeit von 0,4 s (im TT-System 0,2 s). 5 s sind nur für Verteilerstromkreise und Endstromkreise > 32 A im TN-System erlaubt. Mit dem Installationstester prüfst du Auslösezeit und Auslösestrom – ein guter RCD fällt typisch bei 0,5 … 1 × I_ΔN und in deutlich unter 300 ms.",
+      formula: "TN, 230 V, ≤ 32 A: t_a ≤ 0,4 s | TT: t_a ≤ 0,2 s | RCD-Zusatzschutz: I_ΔN ≤ 30 mA",
+      source: "GP Teil 1 / Fachkunde Kap. 5 (DIN VDE 0100-410, Abschaltbedingungen)",
+      isWeakSpot: false
+    },
+    {
+      id: "retro_11",
+      category: "leitungsberechnung",
+      fach: "IE",
+      isRetro: true,
+      lehrjahr: 2,
+      question: "Was bedeuten die Kennzeichnung „gG“ bei einer Schmelzsicherung und die Charakteristik „B“ bzw. „C“ bei einem Leitungsschutzschalter?",
+      options: [
+        "gG = Geräteschutz für Halbleiter; B löst magnetisch bei 5–10 × In aus, C bei 3–5 × In",
+        "gG = Ganzbereichs-Leitungsschutz; B löst magnetisch (Kurzschluss) bei 3–5 × In aus, C bei 5–10 × In",
+        "gG = Teilbereichs-Motorschutz; B ist für Motoren, C ausschließlich für Beleuchtung vorgesehen",
+        "gG = Ganzbereichs-Generatorschutz; B und C unterscheiden sich nur im Bemessungsstrom, nicht im Auslöseverhalten"
+      ],
+      correctIndex: 1,
+      explanation: "„g“ = Ganzbereich (schützt bei Überlast UND Kurzschluss), „G“ = allgemeine Anwendung/Leitungsschutz – gG ersetzt die alte Bezeichnung gL. Beim LS-Schalter bestimmt die Charakteristik die Schwelle des magnetischen Schnellauslösers: B bei 3–5 × In (Standard im Wohnbau), C bei 5–10 × In (Motoren, Trafos, LED-Treiber mit hohem Einschaltstrom). Aber Achtung: Mit C brauchst du eine niedrigere Schleifenimpedanz Z_S, damit die Abschaltzeit noch eingehalten wird.",
+      formula: "B: I_a = 5 × In | C: I_a = 10 × In (für Abschaltbedingung) → Z_S ≤ U0 / I_a",
+      source: "GP Teil 1 / Fachkunde Kap. 4 (Überstromschutzeinrichtungen)",
+      isWeakSpot: false
+    },
+    {
+      id: "retro_12",
+      category: "schutz_vde",
+      fach: "SG",
+      isRetro: true,
+      lehrjahr: 2,
+      question: "Du sollst am Hausanschlusskasten bzw. Zählerplatz vor dem Zähler Spannung messen. Welche Messkategorie nach DIN EN 61010-1 muss dein Messgerät mindestens haben?",
+      options: [
+        "CAT II – Messungen an Geräten, die über Stecker an der Steckdose betrieben werden",
+        "CAT III – Messungen in der festen Gebäudeinstallation, z. B. Unterverteilung",
+        "CAT I – Messungen an Stromkreisen ohne direkte Netzverbindung",
+        "CAT IV – Messungen an der Quelle der Niederspannungsinstallation (Hausanschluss, Zähler)"
+      ],
+      correctIndex: 3,
+      explanation: "Je näher an der Einspeisung, desto höher die möglichen Überspannungsimpulse und Kurzschlussenergien: CAT IV gilt für den Ursprung der Installation (Hausanschluss, Zähler, Freileitung), CAT III für die feste Gebäudeinstallation (Verteiler, Sammelschienen, fest angeschlossene Motoren), CAT II für steckerfertige Geräte, CAT I für nicht netzverbundene Kreise. Zur Kategorie gehört immer die Spannung, z. B. „CAT IV 600 V“. Ein billiges CAT-II-Multimeter kann am HAK bei einem Fehler regelrecht explodieren (Lichtbogen).",
+      formula: "CAT I (ohne Netz) < CAT II (Steckdose) < CAT III (Verteilung) < CAT IV (Hausanschluss/Zähler)",
+      source: "GP Teil 1 / Fachkunde Kap. 3 (Messtechnik, DIN EN 61010-1)",
+      isWeakSpot: false
+    },
+    {
+      id: "retro_13",
+      category: "leitungsberechnung",
+      fach: "IE",
+      isRetro: true,
+      lehrjahr: 2,
+      question: "Welcher Spannungsfall ist für Verbraucherstromkreise zwischen Zähler und Verbraucher nach DIN 18015-1 bzw. TAB zulässig, und welche Empfehlung gibt DIN VDE 0100-520 für die gesamte Anlage ab Hausanschluss?",
+      options: [
+        "Max. 1 % ab Zähler und max. 2 % ab Hausanschluss",
+        "Max. 5 % ab Zähler und max. 10 % ab Hausanschluss",
+        "Max. 3 % ab Zähler und max. 4 % ab Hausanschluss",
+        "Max. 0,5 % ab Zähler und max. 3 % ab Hausanschluss"
+      ],
+      correctIndex: 2,
+      explanation: "Vom Zähler bis zum Verbraucher soll der Spannungsfall höchstens 3 % betragen (bei 230 V also 6,9 V), für die gesamte Anlage ab Hausanschluss empfiehlt DIN VDE 0100-520 max. 4 %. Die 0,5 % aus der NAV betreffen nur die Hauptleitung zwischen Hausanschluss und Zähler. Praxis: Bei langen Wegen (Garage, Gartenhaus, Wallbox) rechnest du immer mit – oft musst du einen Querschnitt größer gehen als die Strombelastbarkeit allein verlangen würde.",
+      formula: "ΔU_1~ = 2 · l · I · cos φ / (γ · A)  |  Δu = ΔU / U · 100 % ≤ 3 %",
+      source: "GP Teil 1 / Fachkunde Kap. 4 (Leitungsberechnung, DIN VDE 0100-520)",
+      isWeakSpot: false
+    },
+    {
+      id: "retro_14",
+      category: "schuetz_fluidsim",
+      fach: "SG",
+      isRetro: true,
+      lehrjahr: 2,
+      question: "Wie wird bei einer Schützschaltung die Selbsthaltung von K1 realisiert?",
+      options: [
+        "Ein Öffner 11-12 von K1 wird in Reihe zum Stopptaster geschaltet",
+        "Ein Schließer 13-14 von K1 wird parallel zum Starttaster geschaltet",
+        "Ein Schließer 13-14 von K1 wird in Reihe zum Starttaster geschaltet",
+        "Ein Öffner 21-22 von K1 wird parallel zum Stopptaster geschaltet"
+      ],
+      correctIndex: 1,
+      explanation: "Der Hilfsschließer 13-14 von K1 überbrückt den Starttaster S2 (Schließer). Nach dem Loslassen von S2 bleibt die Spule A1-A2 über den eigenen Kontakt versorgt. Unterbrochen wird der Kreis durch den Stopptaster S1 (Öffner) in Reihe davor – er hat dadurch Vorrang vor START. Da der Stopp als Öffner ausgeführt ist, fällt K1 auch bei Drahtbruch im Steuerkreis ab: drahtbruchsicher. Ordnungszahlen: 1-2 Öffner, 3-4 Schließer – die erste Ziffer ist nur die laufende Nummer.",
+      formula: "Steuerstrom: L → F → S1 (Öffner) → [S2 ∥ K1 13-14] → K1 A1-A2 → N",
+      source: "GP Teil 1 / Fachkunde Kap. 8 (Schützsteuerungen, Selbsthaltung)",
+      isWeakSpot: false
+    },
+    {
+      id: "retro_15",
+      category: "schutz_vde",
+      fach: "IE",
+      isRetro: true,
+      lehrjahr: 1,
+      question: "Mit welchem Prüfgerät stellst du die Spannungsfreiheit (3. Sicherheitsregel) korrekt fest?",
+      options: [
+        "Mit einem einpoligen Phasenprüfer-Schraubendreher (Glimmlampe), weil er schnell und überall verfügbar ist",
+        "Mit einem berührungslosen Spannungsdetektor, weil er ohne Kontakt zum Leiter auskommt",
+        "Mit einem zweipoligen Spannungsprüfer nach DIN EN 61243-3, allpolig zwischen allen Leitern und gegen PE/Erde",
+        "Mit einer Stromzange, weil ohne Stromfluss auch keine Spannung anliegen kann"
+      ],
+      correctIndex: 2,
+      explanation: "Spannungsfreiheit stellst du nur mit einem zweipoligen Spannungsprüfer (z. B. Duspol) nach DIN EN 61243-3 fest – allpolig: L1-L2, L2-L3, L1-L3, jeder Außenleiter gegen N und gegen PE. Den Prüfer unmittelbar vorher und nachher an einer bekannten Spannungsquelle testen. Phasenprüfer-Schraubendreher und berührungslose Detektoren sind nur Orientierungshilfen: Isolierte Schuhe, Leitern oder abgeschirmte Kabel liefern falsche „spannungsfrei“-Anzeigen. Eine Stromzange sagt über Spannung gar nichts aus.",
+      source: "GP Teil 1 / Fachkunde Kap. 1 & 3 (Spannungsprüfer, DIN VDE 0105-100)",
+      isWeakSpot: false
+    },
+    {
+      id: "retro_16",
+      category: "leitungsberechnung",
+      fach: "IE",
+      isRetro: true,
+      lehrjahr: 2,
+      question: "Für einen Stromkreis gilt die Bedingung I_b ≤ I_n ≤ I_z. Ein Durchlauferhitzer zieht I_b = 13 A, die Leitung ist in der gewählten Verlegeart mit I_z = 18,5 A belastbar. Welcher LS-Schalter ist richtig?",
+      options: [
+        "B 10 A, weil der LS möglichst klein gewählt werden muss",
+        "B 16 A, weil 13 A ≤ 16 A ≤ 18,5 A gilt",
+        "B 20 A, weil der LS immer größer als die Leitung belastbar sein muss",
+        "B 25 A, um Fehlauslösungen beim Einschalten sicher zu vermeiden"
+      ],
+      correctIndex: 1,
+      explanation: "Der Bemessungsstrom des LS muss zwischen Betriebsstrom und Strombelastbarkeit der Leitung liegen: 13 A ≤ 16 A ≤ 18,5 A ✔. Ein 10-A-LS würde im Betrieb auslösen (I_n < I_b), ein 20-A-LS schützt die Leitung nicht mehr (I_n > I_z) – sie könnte dauerhaft überlastet werden, ohne dass er auslöst. Die Strombelastbarkeit I_z hängt von Verlegeart, Häufung und Umgebungstemperatur ab – Umrechnungsfaktoren nicht vergessen!",
+      formula: "I_b ≤ I_n ≤ I_z  |  I_2 ≤ 1,45 · I_z",
+      source: "GP Teil 1 / Fachkunde Kap. 4 (Leitungsschutz, DIN VDE 0100-430)",
+      isWeakSpot: false
     }
   ],
+
+  // ISB-Lehrplan Bayern – Elektroniker/-in Fachrichtung Energie- und Gebäudetechnik
+  // (Klasse EEL 12b, Staatliche Berufsschule Lauingen). LF 1–8 = Stoff GP Teil 1,
+  // LF 9–13 = Stoff GP Teil 2. Lernfeld-Titel sinngemäß nach KMK-Rahmenlehrplan –
+  // bei Abweichungen gilt der offizielle Lehrplan des ISB.
+  bayerischerLehrplan: {
+    schule: "Staatliche Berufsschule Lauingen",
+    klasse: "EEL 12b",
+    beruf: "Elektroniker/-in für Energie- und Gebäudetechnik",
+    pruefungsteile: [
+      { id: "GP1", title: "Gesellenprüfung Teil 1", lernfelder: [1, 2, 3, 4, 5, 6, 7, 8], hinweis: "Ende 2. Ausbildungsjahr – Arbeitsauftrag + schriftliche Prüfung, geht mit 40 % in das Gesamtergebnis ein." },
+      { id: "GP2", title: "Gesellenprüfung Teil 2", lernfelder: [9, 10, 11, 12, 13], hinweis: "Ende der Ausbildung – Kundenauftrag, Systementwurf, Funktions- und Systemanalyse, WiSo; 60 % des Gesamtergebnisses." }
+    ],
+    faecher: [
+      { id: "GST", title: "Gebäudesystemtechnik", lernfelder: [3, 7, 12, 13] },
+      { id: "KoSys", title: "Kommunikationssysteme", lernfelder: [4, 9] },
+      { id: "SG", title: "System- und Gerätetechnik", lernfelder: [1, 6, 8, 10] },
+      { id: "IE", title: "Installations- und Energietechnik", lernfelder: [2, 5, 11] },
+      { id: "PuG", title: "Politik und Gesellschaft (WiSo)", lernfelder: [] }
+    ],
+    lernfelder: [
+      { lf: 1, title: "Elektrotechnische Systeme analysieren und Funktionen prüfen", fach: "SG", pruefung: "GP1", lehrjahr: 1, inhalte: ["Ohmsches Gesetz", "Reihen-/Parallelschaltung, Spannungsteiler", "Elektrische Leistung & Arbeit", "Messen mit Multimeter, Messkategorien CAT I–IV"] },
+      { lf: 2, title: "Elektrische Installationen planen und ausführen", fach: "IE", pruefung: "GP1", lehrjahr: 1, inhalte: ["5 Sicherheitsregeln DIN VDE 0105-100", "Leiterfarben, Leitungstypen (NYM, H07V-K)", "Installationsschaltungen (Aus-, Wechsel-, Kreuzschaltung)", "Leitungsschutz I_b ≤ I_n ≤ I_z"] },
+      { lf: 3, title: "Steuerungen und Regelungen analysieren und anpassen", fach: "GST", pruefung: "GP1", lehrjahr: 1, inhalte: ["Schütz-Grundschaltungen, Selbsthaltung", "Logikgrundfunktionen UND/ODER/NICHT", "Kleinsteuerung LOGO! – erste Programme"] },
+      { lf: 4, title: "Informationstechnische Systeme bereitstellen", fach: "KoSys", pruefung: "GP1", lehrjahr: 1, inhalte: ["PC-Komponenten, Betriebssysteme", "Netzwerkgrundlagen, IP-Adressen", "Datenschutz & Datensicherheit"] },
+      { lf: 5, title: "Elektroenergieversorgung und Sicherheit von Betriebsmitteln gewährleisten", fach: "IE", pruefung: "GP1", lehrjahr: 2, inhalte: ["Netzsysteme TN/TT/IT", "Schutzmaßnahmen DIN VDE 0100-410, RCD", "Schutzklassen I/II/III, SELV/PELV/FELV", "Spannungsfall"] },
+      { lf: 6, title: "Anlagen und Geräte analysieren und prüfen", fach: "SG", pruefung: "GP1", lehrjahr: 2, inhalte: ["Erstprüfung DIN VDE 0100-600", "Wiederholungsprüfung DIN VDE 0701-0702", "R_PE, R_ISO, Z_S, RCD-Prüfung", "Prüfprotokolle"] },
+      { lf: 7, title: "Steuerungen für Anlagen programmieren und realisieren", fach: "GST", pruefung: "GP1", lehrjahr: 2, inhalte: ["SPS/LOGO! in FUP & KOP", "Zeitglieder, Zähler, RS-Speicher", "Sensoren & Aktoren, Drahtbruchsicherheit"] },
+      { lf: 8, title: "Antriebssysteme auswählen und integrieren", fach: "SG", pruefung: "GP1", lehrjahr: 2, inhalte: ["Drehstrom-Asynchronmotor, Typenschild", "Stern-Dreieck, Wendeschützschaltung", "Motorschutz, Frequenzumrichter"] },
+      { lf: 9, title: "Kommunikationsinfrastrukturen in Wohn- und Zweckbauten planen und installieren", fach: "KoSys", pruefung: "GP2", lehrjahr: 3, inhalte: ["Antennen- & SAT-Anlagen, Pegelrechnung dB/dBµV", "Strukturierte Verkabelung DIN EN 50173", "BK-Anlagen, IPTV"] },
+      { lf: 10, title: "Energie- und gebäudetechnische Anlagen und Geräte auswählen und in Betrieb nehmen", fach: "SG", pruefung: "GP2", lehrjahr: 3, inhalte: ["Leistungselektronik, Dimmer, Gleichrichter", "Digitaltechnik", "Geräte- und Anlagenprüfung"] },
+      { lf: 11, title: "Energieversorgungsanlagen planen, errichten und prüfen", fach: "IE", pruefung: "GP2", lehrjahr: 3, inhalte: ["Leitungsberechnung & Selektivität", "PV-Anlagen, Wallbox, Wärmepumpe", "Blitz- & Überspannungsschutz"] },
+      { lf: 12, title: "Gebäudesystemtechnik planen und in Betrieb nehmen", fach: "GST", pruefung: "GP2", lehrjahr: 4, inhalte: ["KNX TP1: physikalische Adresse & Gruppenadresse", "ETS-Projektierung", "Smart Home & Energiemanagement"] },
+      { lf: 13, title: "Gebäudetechnische Anlagen und Gefahrenmeldeanlagen instand halten", fach: "GST", pruefung: "GP2", lehrjahr: 4, inhalte: ["Brand- & Einbruchmeldeanlagen, Ruhestromprinzip", "Lichtruf DIN VDE 0834", "Systematische Fehlersuche, Prüfprotokolle"] }
+    ]
+  },
 
   cheatSheets: [
     {

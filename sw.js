@@ -1,11 +1,15 @@
-const CACHE_NAME = 'elektrocoach-pro-v3';
+const CACHE_NAME = 'elektrocoach-pro-v4';
 const ASSETS = [
   '/',
   '/index.html',
   '/css/styles.css',
   '/js/data.js',
+  '/js/tools_guide.js',
+  '/js/logo_simulator.js',
+  '/js/math_scaffold.js',
   '/js/math_trainer.js',
   '/js/simulators.js',
+  '/js/study_planer.js',
   '/js/app.js',
   '/manifest.json',
   '/icon.svg'

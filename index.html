@@ -79,6 +79,9 @@
         </div>
       </div>
 
+      <!-- PROAKTIVER KLAUSUR- & LERNZIEL-PLANER -->
+      <div id="study-plan-hero" style="margin-top:14px;"></div>
+
       <!-- WACKEL-THEMEN RADAR -->
       <div class="section-card">
         <div class="section-header">
@@ -128,36 +131,66 @@
 
     <!-- TAB 3: BAUSTELLEN-MATHE & KOPFRECHNEN -->
     <section id="tab-math" class="tab-panel">
-      <div class="section-card">
+      <!-- 1. GEFÜHRTE DIVISION (SCAFFOLDING) & 1X1 FUNDAMENT -->
+      <div id="math-scaffold-container"></div>
+
+      <!-- 2. TRICKS, FLÄCHEN & EINHEITEN -->
+      <div class="section-card" style="margin-top:16px;">
         <div class="section-header">
-          <h2>🧮 Baustellen-Mathe & Kopfrechen-Trainer</h2>
+          <h2>⚡ Kopfrechen-Hacks, Maße & Einheiten</h2>
           <span class="badge badge-emerald">Routine & Hacks</span>
         </div>
         <p style="font-size:0.83rem;color:var(--text-muted);margin-bottom:14px;">
-          Lerne krasse Rechentricks (wie 989 : 12, ×15, ×25), trainiere das 1×1 und meistere Maße & Zuschnitt im Schlaf.
+          Lerne Rechentricks (wie 989 : 12, ×15, ×25) und meistere Maße & Zuschnitt im Schlaf.
         </p>
         <div id="math-trainer-container"></div>
       </div>
     </section>
 
-    <!-- TAB 4: INTERAKTIVES PRAXIS-LABOR (KLEMMBRETT, FLUIDSIM, dB) -->
+    <!-- TAB 4: INTERAKTIVES PRAXIS-LABOR (KLEMMBRETT, FLUIDSIM, dB, SIEMENS LOGO!) -->
     <section id="tab-sim" class="tab-panel">
       <div id="simulators-container"></div>
     </section>
 
-    <!-- TAB 5: SPICKZETTEL & BAUSTELLEN-RECHNER -->
+    <!-- TAB 5: SPICKZETTEL, WERKZEUGE & BAYERISCHER LEHRPLAN -->
     <section id="tab-cheats" class="tab-panel">
-      <div class="section-card">
-        <div class="section-header">
-          <h2>🧮 Schnellrechner: Schlupf, Drehstrom & Spannungsfall ΔU</h2>
-        </div>
-        <div id="quick-calculators"></div>
+      <!-- Sub-Navigation für Tab 5 -->
+      <div style="display:flex;gap:8px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px;">
+        <button class="filter-pill active" id="btn-sub-cheats" onclick="ElektroApp.switchCheatsSubtab('cheats')">
+          📑 Spickzettel & Formeln
+        </button>
+        <button class="filter-pill" id="btn-sub-tools" onclick="ElektroApp.switchCheatsSubtab('tools')">
+          🧰 Werkzeugkunde & Quiz
+        </button>
+        <button class="filter-pill" id="btn-sub-lehrplan" onclick="ElektroApp.switchCheatsSubtab('lehrplan')">
+          🏛️ Lehrplan ISB Bayern
+        </button>
       </div>
-      <div class="section-card">
-        <div class="section-header">
-          <h2>📑 Kompakte Prüfungs-Spickzettel (Offline)</h2>
+
+      <!-- SUBTAB 1: SPICKZETTEL & SCHNELLRECHNER -->
+      <div id="subtab-content-cheats">
+        <div class="section-card">
+          <div class="section-header">
+            <h2>🧮 Schnellrechner: Schlupf, Drehstrom & Spannungsfall ΔU</h2>
+          </div>
+          <div id="quick-calculators"></div>
         </div>
-        <div id="cheatsheets-container"></div>
+        <div class="section-card">
+          <div class="section-header">
+            <h2>📑 Kompakte Prüfungs-Spickzettel (Offline)</h2>
+          </div>
+          <div id="cheatsheets-container"></div>
+        </div>
+      </div>
+
+      <!-- SUBTAB 2: WERKZEUGKUNDE & QUIZ -->
+      <div id="subtab-content-tools" style="display:none;">
+        <div id="tools-guide-container"></div>
+      </div>
+
+      <!-- SUBTAB 3: BAYERISCHER LEHRPLAN EXPLORER -->
+      <div id="subtab-content-lehrplan" style="display:none;">
+        <div id="lehrplan-container"></div>
       </div>
     </section>
   </main>
@@ -188,8 +221,12 @@
   </nav>
 
   <script src="js/data.js"></script>
+  <script src="js/tools_guide.js"></script>
+  <script src="js/logo_simulator.js"></script>
+  <script src="js/math_scaffold.js"></script>
   <script src="js/math_trainer.js"></script>
   <script src="js/simulators.js"></script>
+  <script src="js/study_planer.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
