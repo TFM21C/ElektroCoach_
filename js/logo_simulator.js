@@ -1,600 +1,1154 @@
 // ============================================================================
-// ElektroCoach PRO – Siemens LOGO! 8 Steuerungs-Simulator (eigenständiges Modul)
-// 1. State: Eingänge I1–I4 (Schalter/Taster), Ausgänge Q1/Q2, TOFF-Timer, RS-Speicher
-// 2. Presets: Treppenlicht (TOFF 3 s), Zweihand (UND), Wendeschütz (Verriegelung),
-//    Selbsthaltung (RS, Reset-Vorrang), FUP-Sandbox (AND/OR/NAND/NOR/XOR/NOT)
-// 3. UI: LOGO!-Gehäuse, Amber-LCD, Kipp-/Tastschalter, Relais-Leuchten, Live-FUP
-// 4. API: ElektroLogo.render(containerEl) / ElektroLogo.destroy()
+// ElektroCoach PRO – 🛠️ Interaktives Schütz- & Steuerungs-Brett (V5, Neubau)
+// 1. Steckbrett: 4 Strompfade zwischen L1/+24 V (oben) und N/0 V (unten),
+//    je 5 Kontakt-Steckplätze (Zeile A–E) + 1 Aktor-Steckplatz (Spule/Lampe/Zeitrelais/RS)
+//    + schaltbare Querbrücken zwischen benachbarten Pfaden nach jeder Zeile.
+// 2. Bauteile: Drahtbrücke, Öffner/Schließer (Taster, Rastschalter, Hilfskontakte),
+//    Motorschutz -F2 95–96, Schützspulen -K1/-K2/-K3, TON/TOFF, RS-Flip-Flop, Meldeleuchten.
+// 3. 2-Phasen-Engine: Phase 1 Stromfluss (Union-Find über leitende Kontakte & Brücken),
+//    Phase 2 genau EINE Spule umschalten (Abfallen vor Anziehen) → wiederholen bis stabil.
+// 4. 5 Bauaufträge mit automatischem Prüf-Algorithmus (checkChallenge) & +50 XP.
+// 5. API: ElektroLogo.render(containerEl) / ElektroLogo.destroy()
 // ============================================================================
 
 window.ElektroLogo = (function () {
   'use strict';
 
+  const STORE_KEY = 'elektrocoach_schuetzbrett_v5';
+  const COLS = 4;
+  const ROWS = 5; // Kontaktzeilen A–E
+  const ROW_NAMES = ['A', 'B', 'C', 'D', 'E'];
+  const PAIRS = [[0, 1], [1, 2], [2, 3]]; // Querbrücken zwischen Nachbarpfaden
+  const PAIR_KEYS = ['1-2', '2-3', '3-4'];
+  const TON_MS = 2000;
   const TOFF_MS = 3000;
-  const TICK_MS = 50;
+  const TICK_MS = 100;
+  const XP_REWARD = 50;
+  const OUT_LABELS = ['K1', 'K2', 'K3', 'K1T', 'K2T', 'B1', 'P1', 'P2'];
 
   // --------------------------------------------------------------------------
-  // Grundfunktionen für die FUP-Sandbox (Symbole nach DIN EN 60617-12)
+  // Bauteil-Katalog
   // --------------------------------------------------------------------------
-  const FUNCS = {
-    AND:  { sym: '&',  neg: false, unary: false, name: 'UND',      f: (a, b) => a && b },
-    OR:   { sym: '≥1', neg: false, unary: false, name: 'ODER',     f: (a, b) => a || b },
-    NAND: { sym: '&',  neg: true,  unary: false, name: 'NICHT-UND', f: (a, b) => !(a && b) },
-    NOR:  { sym: '≥1', neg: true,  unary: false, name: 'NICHT-ODER', f: (a, b) => !(a || b) },
-    XOR:  { sym: '=1', neg: false, unary: false, name: 'EXKLUSIV-ODER', f: (a, b) => a !== b },
-    NOT:  { sym: '1',  neg: true,  unary: true,  name: 'NICHT',    f: (a) => !a }
+  const BTN_LABELS = ['S0', 'S1', 'S2'];
+  const AUX_LABELS = ['K1', 'K2', 'K3', 'K1T', 'K2T', 'B1'];
+
+  const PARTS = {
+    wire:   { kind: 'contact', name: 'Drahtbrücke', icon: '│', hint: 'Leitet immer' },
+    open:   { kind: 'tool', name: 'Leer / Radierer', icon: '⌫', hint: 'Steckplatz leeren (Unterbrechung)' },
+    f2_nc:  { kind: 'contact', name: 'Motorschutz -F2', icon: '🔥', labels: ['F2'], nc: true, act: 'thermal', hint: '95–96 Öffner' },
+    btn_nc: { kind: 'contact', name: 'Taster Öffner', icon: '⏹', labels: BTN_LABELS, nc: true, act: 'push', flip: 'btn_no', hint: '11–12' },
+    btn_no: { kind: 'contact', name: 'Taster Schließer', icon: '⏺', labels: BTN_LABELS, nc: false, act: 'push', flip: 'btn_nc', hint: '13–14' },
+    sw_no:  { kind: 'contact', name: 'Rastschalter Schließer', icon: '⏻', labels: ['S3'], nc: false, act: 'latch', flip: 'sw_nc', hint: '-S3 13–14' },
+    sw_nc:  { kind: 'contact', name: 'Rastschalter Öffner', icon: '⭘', labels: ['S3'], nc: true, act: 'latch', flip: 'sw_no', hint: '-S3 11–12' },
+    aux_no: { kind: 'contact', name: 'Hilfskontakt Schließer', icon: '⊣', labels: AUX_LABELS, nc: false, act: 'aux', flip: 'aux_nc', hint: '13–14 (Selbsthaltung)' },
+    aux_nc: { kind: 'contact', name: 'Hilfskontakt Öffner', icon: '⊢', labels: AUX_LABELS, nc: true, act: 'aux', flip: 'aux_no', hint: '21–22 (Verriegelung)' },
+    coil_k1:    { kind: 'out', name: 'Schützspule -K1', icon: '▭', out: 'K1', cycle: 'coil_k2', hint: 'Rechtslauf / Netz' },
+    coil_k2:    { kind: 'out', name: 'Schützspule -K2', icon: '▭', out: 'K2', cycle: 'coil_k3', hint: 'Linkslauf' },
+    coil_k3:    { kind: 'out', name: 'Hilfsschütz -K3', icon: '▭', out: 'K3', cycle: 'coil_k1', hint: 'Hilfs-/Sternschütz' },
+    timer_ton:  { kind: 'out', name: 'Zeitrelais TON -K1T', icon: '⏱', out: 'K1T', cycle: 'timer_toff', hint: 'Einschaltverzögert 2 s' },
+    timer_toff: { kind: 'out', name: 'Zeitrelais TOFF -K2T', icon: '⏲', out: 'K2T', cycle: 'timer_ton', hint: 'Ausschaltverzögert 3 s' },
+    rs_ff:      { kind: 'out', name: 'RS-Flip-Flop -B1', icon: '⧉', out: 'B1', hint: 'S = eigener Pfad, R = Nachbarpfad' },
+    lamp_green: { kind: 'out', name: 'Meldeleuchte -P1 grün', icon: '◉', out: 'P1', cycle: 'lamp_red', hint: 'Betrieb' },
+    lamp_red:   { kind: 'out', name: 'Meldeleuchte -P2 rot', icon: '◉', out: 'P2', cycle: 'lamp_green', hint: 'Störung' }
   };
 
-  // --------------------------------------------------------------------------
-  // Presets: Eingangstypen, Rollen, Ausgangsbezeichnungen & Lerntexte
-  // --------------------------------------------------------------------------
-  const PRESETS = {
-    treppenlicht: {
-      btn: '💡 Treppenlicht / Lüfter',
-      title: 'Ausschaltverzögerung (TOFF) · B001',
-      types: ['push', 'switch', 'switch', 'switch'],
-      roles: ['Taster Licht', 'frei', 'frei', 'frei'],
-      outputs: ['Licht / Lüfter', '—'],
-      desc: 'I1 (Taster) schaltet Q1 <strong>sofort</strong> ein. Nach dem Loslassen läuft Q1 noch ' +
-        '<strong>3 s nach</strong> (Ausschaltverzögerung TOFF). Erneutes Drücken während des Nachlaufs ' +
-        'startet die Zeit neu (nachtriggerbar).',
-      hint: 'Praxis: Im Treppenhaus oder beim Badlüfter stellt man mehrere Minuten Nachlauf ein. ' +
-        'Prüfungsfrage-Klassiker: TON = Einschaltverzögerung, TOFF = Ausschaltverzögerung.'
-    },
-    zweihand: {
-      btn: '✋✋ Zweihand (UND)',
-      title: 'UND-Verknüpfung · B001',
-      types: ['push', 'push', 'switch', 'switch'],
-      roles: ['Hand links', 'Hand rechts', 'frei', 'frei'],
-      outputs: ['Presse', '—'],
-      desc: 'Q1 schaltet nur, solange <strong>I1 UND I2</strong> gleichzeitig gedrückt sind. ' +
-        'Lässt der Bediener eine Hand los, fällt Q1 sofort ab – beide Hände sind außerhalb des Gefahrenbereichs.',
-      hint: 'Achtung: Echte Zweihandschaltungen nach DIN EN ISO 13851 verlangen zusätzlich Gleichzeitigkeit ' +
-        '(≤ 0,5 s) und eine sichere Steuerung. Eine Standard-LOGO! ist <strong>kein Sicherheitsbaustein</strong>.'
-    },
-    wendeschuetz: {
-      btn: '🔁 Wendeschütz',
-      title: 'Wendeschützschaltung mit Verriegelung · B001/B002',
-      types: ['switch', 'switch', 'switch', 'switch'],
-      roles: ['Rechtslauf', 'Linkslauf', 'frei', 'frei'],
-      outputs: ['K1 Rechtslauf', 'K2 Linkslauf'],
-      desc: 'I1 schaltet Q1 (Rechtslauf), I2 schaltet Q2 (Linkslauf). Die negierte Rückmeldung ' +
-        '<strong>Q1 sperrt Q2</strong> und <strong>Q2 sperrt Q1</strong> – beide Schütze können nie gleichzeitig anziehen.',
-      hint: 'Praxis: Zusätzlich zur Software-Verriegelung immer die Hardware-Verriegelung über die Öffner-Hilfskontakte ' +
-        'von K1/K2 verdrahten. Klebt ein Schütz, verhindert nur sie den Kurzschluss zwischen zwei Außenleitern.'
-    },
-    selbsthaltung: {
-      btn: '🔒 Selbsthaltung (RS)',
-      title: 'Selbsthalterelais (RS, rücksetzdominant) · B001',
-      types: ['push', 'push', 'switch', 'switch'],
-      roles: ['Start (S)', 'Stopp (R)', 'frei', 'frei'],
-      outputs: ['K1 Motor', '—'],
-      desc: 'I1 (Start) <strong>setzt</strong> den Speicher, Q1 bleibt nach dem Loslassen an. ' +
-        'I2 (Stopp) <strong>setzt zurück</strong>. Werden beide gleichzeitig gedrückt, gewinnt Reset (Reset-Vorrang).',
-      hint: 'Praxis: Den Stopp-Taster als Öffner anschließen (drahtbruchsicher) und in der LOGO! negieren. ' +
-        'Bei Maschinen muss Stopp immer Vorrang haben – darum rücksetzdominantes RS-Glied.'
-    },
-    fup_sandbox: {
-      btn: '🧪 FUP-Sandbox',
-      title: 'Grundfunktion · B001',
-      types: ['switch', 'switch', 'switch', 'switch'],
-      roles: ['Eingang A', 'Eingang B', 'frei', 'frei'],
-      outputs: ['Ergebnis', '—'],
-      desc: 'Wähle eine Grundfunktion und teste sie mit I1 und I2. Die Wahrheitstabelle markiert die ' +
-        'aktuell anliegende Kombination.',
-      hint: 'Merke: Der Kreis am Ausgang (Negation) dreht das Ergebnis um – NAND ist ein UND mit Kreis, NOR ein ODER mit Kreis.'
-    }
-  };
+  const PALETTE = [
+    'wire', 'open', 'f2_nc', 'btn_nc', 'btn_no', 'aux_no', 'aux_nc', 'sw_no', 'sw_nc',
+    'coil_k1', 'coil_k2', 'coil_k3', 'timer_ton', 'timer_toff', 'rs_ff', 'lamp_green', 'lamp_red'
+  ];
+  const DEFAULT_LABEL = { f2_nc: 'F2', btn_nc: 'S0', btn_no: 'S1', sw_no: 'S3', sw_nc: 'S3', aux_no: 'K1', aux_nc: 'K2' };
 
-  // --------------------------------------------------------------------------
-  // State
-  // --------------------------------------------------------------------------
-  const state = {
-    preset: 'treppenlicht',
-    fupFn: 'AND',
-    inputs: [
-      { id: 'I1', type: 'push', active: false },
-      { id: 'I2', type: 'switch', active: false },
-      { id: 'I3', type: 'switch', active: false },
-      { id: 'I4', type: 'switch', active: false }
-    ],
-    outputs: [
-      { id: 'Q1', active: false },
-      { id: 'Q2', active: false }
-    ],
-    timer: { running: false, duration: TOFF_MS, endAt: 0, remaining: 0 },
-    prevI1: false,  // Flankenerkennung für TOFF
-    rs: false,      // RS-Speicherzustand
-    blocked: '',    // Verriegelungsmeldung (Wendeschütz)
-    sound: true
-  };
-
-  let root = null;       // Container-Element
-  let els = null;        // gecachte DOM-Referenzen
-  let tickId = null;     // setInterval-Handle des Timers
-  let audioCtx = null;
-  let listeners = [];    // registrierte Event-Listener (für destroy)
-  const keyPressed = new Set(); // per Tastatur gehaltene Taster (Index)
-
-  // --------------------------------------------------------------------------
-  // Timer (TOFF)
-  // --------------------------------------------------------------------------
-  function now() {
-    return (window.performance && performance.now) ? performance.now() : Date.now();
-  }
-
-  function startTimer() {
-    state.timer.running = true;
-    state.timer.endAt = now() + state.timer.duration;
-    state.timer.remaining = state.timer.duration;
-    if (tickId === null) tickId = setInterval(tick, TICK_MS);
-  }
-
-  function stopTimer() {
-    state.timer.running = false;
-    state.timer.remaining = 0;
-    if (tickId !== null) {
-      clearInterval(tickId);
-      tickId = null;
+  function terminals(slot) {
+    const isTimer = slot.l === 'K1T' || slot.l === 'K2T';
+    switch (slot.t) {
+      case 'f2_nc': return ['95', '96'];
+      case 'btn_nc': case 'sw_nc': return ['11', '12'];
+      case 'btn_no': case 'sw_no': return ['13', '14'];
+      case 'aux_no': return isTimer ? ['17', '18'] : ['13', '14'];
+      case 'aux_nc': return isTimer ? ['15', '16'] : ['21', '22'];
+      default: return ['', ''];
     }
   }
 
-  function tick() {
-    if (!state.timer.running) {
-      stopTimer();
-      return;
-    }
-    state.timer.remaining = Math.max(0, state.timer.endAt - now());
-    if (state.timer.remaining <= 0) stopTimer();
-    evaluate();
-    update();
+  // --------------------------------------------------------------------------
+  // Brett-Datenmodell & Builder für Start-/Musterlösungen
+  // --------------------------------------------------------------------------
+  function emptyBoard() {
+    return {
+      s: Array.from({ length: COLS }, () => Array.from({ length: ROWS }, () => null)),
+      o: Array.from({ length: COLS }, () => null),
+      b: PAIRS.map(() => Array.from({ length: ROWS }, () => false))
+    };
+  }
+
+  function isValidBoard(b) {
+    return b && Array.isArray(b.s) && b.s.length === COLS && b.s.every(col => Array.isArray(col) && col.length === ROWS) &&
+      Array.isArray(b.o) && b.o.length === COLS && Array.isArray(b.b) && b.b.length === PAIRS.length;
+  }
+
+  // Lesbarer Builder: Pfad 1–4, Zeile 'A'–'E', Brücke '1-2' nach Zeile 'B' …
+  function build() {
+    const board = emptyBoard();
+    const api = {
+      put(path, row, t, l) {
+        board.s[path - 1][ROW_NAMES.indexOf(row)] = { t, l: l || DEFAULT_LABEL[t] || '' };
+        return api;
+      },
+      wires(path, rows) {
+        rows.split('').forEach(r => api.put(path, r, 'wire'));
+        return api;
+      },
+      out(path, t) {
+        board.o[path - 1] = { t };
+        return api;
+      },
+      bridge(pair, afterRow) {
+        board.b[PAIR_KEYS.indexOf(pair)][ROW_NAMES.indexOf(afterRow)] = true;
+        return api;
+      },
+      done: () => board
+    };
+    return api;
+  }
+
+  // Rechtslauf mit Selbsthaltung (Pfad 1+2) – Basis für mehrere Aufträge
+  function baseSelbsthaltung() {
+    return build()
+      .put(1, 'A', 'f2_nc', 'F2').put(1, 'B', 'btn_nc', 'S0').put(1, 'C', 'btn_no', 'S1')
+      .put(2, 'C', 'aux_no', 'K1')
+      .bridge('1-2', 'B').bridge('1-2', 'C');
   }
 
   // --------------------------------------------------------------------------
-  // Steuerungslogik (ein Programmzyklus)
+  // Bauaufträge (Challenges) inkl. Prüf-Testfälle
   // --------------------------------------------------------------------------
-  function evaluate() {
-    const I = state.inputs.map(i => i.active);
-    const prevQ = state.outputs.map(q => q.active);
-    let q1 = false;
-    let q2 = false;
-    state.blocked = '';
+  const SHORT_HINT = '💥 -K1 und -K2 waren gleichzeitig angezogen → Kurzschluss L1–L3 im Hauptstromkreis! ' +
+    'Baue den Öffner -K2 (21–22) in Reihe vor die Spule -K1 und den Öffner -K1 (21–22) in Reihe vor die Spule -K2 (Schützverriegelung).';
+  const OSC_HINT = '〰️ Die Schaltung schwingt (Spule schaltet sich über den eigenen Öffner ständig ab und wieder ein). ' +
+    'Prüfe, ob irgendwo ein Öffner einer Spule im eigenen Strompfad sitzt.';
 
-    switch (state.preset) {
-      case 'treppenlicht': {
-        if (I[0]) {
-          if (state.timer.running) stopTimer();
-          q1 = true;
-        } else if (state.prevI1) {
-          startTimer(); // fallende Flanke → Nachlauf starten
-          q1 = true;
-        } else {
-          q1 = state.timer.running;
-        }
-        state.prevI1 = I[0];
-        break;
+  const t = (label, actions, expect, hint) => ({ label, actions, expect, hint });
+
+  const CHALLENGES = [
+    {
+      id: 'a1',
+      nr: 1,
+      mode: 'wende',
+      tab: '1 · Selbsthaltung',
+      title: 'Auftrag 1: Schütz-Selbsthaltung mit Vorrang Stopp (-K1)',
+      goal: 'Ein Lüftermotor soll mit <strong>-S1</strong> eingeschaltet werden und nach dem Loslassen weiterlaufen. ' +
+        '<strong>-S0</strong> schaltet ab – auch wenn -S1 gleichzeitig gedrückt ist (Vorrang AUS). ' +
+        'Bei Überlast muss <strong>-F2</strong> abschalten.',
+      steps: [
+        'Pfad 1: Zeile A <strong>-F2 (95–96)</strong>, Zeile B <strong>-S0 Öffner (11–12)</strong>, Zeile C <strong>-S1 Schließer (13–14)</strong>.',
+        'Zeilen D und E in Pfad 1 mit einer <strong>Drahtbrücke │</strong> schließen – ein leerer Steckplatz ist eine Unterbrechung!',
+        'Pfad 2, Zeile C: <strong>Hilfskontakt -K1 Schließer (13–14)</strong> = Selbsthaltung.',
+        'Querbrücken <strong>1↔2 nach Zeile B und nach Zeile C</strong> setzen → -K1 (13–14) liegt parallel zu -S1.',
+        'Aktor-Zeile Pfad 1: <strong>Spule -K1 (A1–A2)</strong>.'
+      ],
+      start: () => build().wires(1, 'ABCDE').out(1, 'coil_k1').done(),
+      solution: () => baseSelbsthaltung().wires(1, 'DE').out(1, 'coil_k1').done(),
+      tests: [
+        t('Ruhezustand: -K1 ist abgefallen', [], { K1: 0 },
+          'Im Ruhezustand fließt Strom zur Spule. Steckt noch eine Drahtbrücke statt -S1? -S1 muss ein Schließer (13–14) sein.'),
+        t('-S1 kurz tasten → -K1 zieht an und hält sich selbst', [['tap', 'S1']], { K1: 1 },
+          'Fällt -K1 nach dem Loslassen ab (Tippbetrieb)? Dann fehlt der Selbsthalte-Schließer -K1 (13–14) parallel zu -S1 (Pfad 2 + Querbrücken 1↔2 nach B und C). ' +
+          'Zieht -K1 gar nicht an? Leere Steckplätze im Pfad mit Drahtbrücken schließen.'),
+        t('-S0 tasten → -K1 fällt ab', [['tap', 'S0']], { K1: 0 },
+          '-S0 muss ein Öffner (11–12) VOR der Parallelschaltung -S1 ∥ -K1 sein – sonst wird er von der Selbsthaltung überbrückt.'),
+        t('-S0 und -S1 gleichzeitig drücken → AUS hat Vorrang', [['press', 'S0'], ['press', 'S1']], { K1: 0 },
+          'Vorrang AUS: -S0 muss in Reihe vor -S1 liegen, damit ein gedrückter Stopp-Taster immer gewinnt.'),
+        t('Loslassen, wieder einschalten, Überlast -F2 auslösen → -K1 fällt ab',
+          [['release', 'S1'], ['release', 'S0'], ['tap', 'S1'], ['trip']], { K1: 0 },
+          'Der Öffner -F2 (95–96) des Motorschutzrelais gehört in Reihe in den Steuerstromkreis von -K1.'),
+        t('-F2 zurücksetzen → Motor läuft NICHT von selbst wieder an', [['reset']], { K1: 0 },
+          'Nach einer Überlast darf der Motor nicht selbsttätig anlaufen – die Selbsthaltung muss durch -F2 unterbrochen werden.')
+      ]
+    },
+    {
+      id: 'a2',
+      nr: 2,
+      mode: 'wende',
+      tab: '2 · Wendeschütz Über-AUS',
+      title: 'Auftrag 2: Wendeschützschaltung mit Schützverriegelung (Über-AUS)',
+      goal: 'Rechtslauf <strong>-K1</strong> über -S1, Linkslauf <strong>-K2</strong> über -S2 – jeweils mit Selbsthaltung. ' +
+        'Zum Umschalten muss erst <strong>-S0</strong> gedrückt werden (Über-AUS). <strong>-K1 und -K2 dürfen NIE gleichzeitig anziehen</strong> ' +
+        '(Kurzschluss im Hauptstromkreis!).',
+      steps: [
+        'Rechtslauf steht schon in Pfad 1+2. Ergänze in Pfad 1, Zeile D den <strong>Öffner -K2 (21–22)</strong>.',
+        'Pfad 3: Zeile C <strong>-S2 Schließer</strong>, Zeile D <strong>Öffner -K1 (21–22)</strong>, Zeile E Drahtbrücke, Aktor <strong>-K2</strong>.',
+        'Pfad 4, Zeile C: <strong>Selbsthaltung -K2 (13–14)</strong>, Querbrücken <strong>3↔4 nach B und C</strong>.',
+        'Gemeinsame Versorgung: Querbrücke <strong>2↔3 nach Zeile B</strong> – so speisen -F2 und -S0 beide Drehrichtungen.',
+        'Pfade 3 und 4 haben in Zeile A/B KEINE Drahtbrücke – sonst würden -F2/-S0 umgangen!'
+      ],
+      start: () => baseSelbsthaltung().wires(1, 'DE').out(1, 'coil_k1').out(3, 'coil_k2').done(),
+      solution: () => baseSelbsthaltung()
+        .put(1, 'D', 'aux_nc', 'K2').wires(1, 'E').out(1, 'coil_k1')
+        .put(3, 'C', 'btn_no', 'S2').put(3, 'D', 'aux_nc', 'K1').wires(3, 'E').out(3, 'coil_k2')
+        .put(4, 'C', 'aux_no', 'K2')
+        .bridge('2-3', 'B').bridge('3-4', 'B').bridge('3-4', 'C')
+        .done(),
+      tests: [
+        t('Ruhezustand: -K1 = 0, -K2 = 0', [], { K1: 0, K2: 0 }, 'Im Ruhezustand darf kein Schütz anziehen – prüfe Schließer/Öffner der Taster.'),
+        t('-S1 tasten → Rechtslauf -K1 bleibt an', [['tap', 'S1']], { K1: 1, K2: 0 },
+          'Rechtslauf: -S1 (13–14) mit Selbsthaltung -K1 (13–14) parallel – und der Öffner -K2 (21–22) in Reihe.'),
+        t('-S2 drücken, während -K1 läuft → -K2 darf NICHT anziehen', [['tap', 'S2']], { K1: 1, K2: 0 },
+          'Schützverriegelung fehlt: Der Öffner -K1 (21–22) muss in Reihe im Strompfad von -K2 liegen.'),
+        t('-S0 tasten → alles aus', [['tap', 'S0']], { K1: 0, K2: 0 },
+          '-S0 muss beide Drehrichtungen abschalten: Gemeinsame Versorgung über die Querbrücke 2↔3 nach -S0 (Zeile B).'),
+        t('-S2 tasten → Linkslauf -K2 bleibt an', [['tap', 'S2']], { K1: 0, K2: 1 },
+          'Linkslauf: -S2 (13–14) in Pfad 3, Selbsthaltung -K2 (13–14) in Pfad 4, Querbrücken 3↔4 nach B und C.'),
+        t('-S1 drücken, während -K2 läuft → -K1 darf NICHT anziehen', [['tap', 'S1']], { K1: 0, K2: 1 },
+          'Der Öffner -K2 (21–22) muss in Reihe im Strompfad von -K1 liegen.'),
+        t('Überlast -F2 → beide Drehrichtungen aus', [['trip']], { K1: 0, K2: 0 },
+          '-F2 (95–96) muss VOR der Aufteilung in Rechts- und Linkslauf liegen.')
+      ]
+    },
+    {
+      id: 'a3',
+      nr: 3,
+      mode: 'wende',
+      tab: '3 · Wendeschütz direkt',
+      title: 'Auftrag 3: Wendeschütz mit Taster- UND Schützverriegelung (direktes Umschalten)',
+      goal: 'Wie Auftrag 2 – aber man soll <strong>direkt von Rechts auf Links umschalten</strong> können, ohne vorher -S0 zu drücken. ' +
+        'Dazu kommt zur Schützverriegelung die <strong>Tasterverriegelung</strong>: Öffner von -S2 im Rechtslauf-Pfad, Öffner von -S1 im Linkslauf-Pfad.',
+      steps: [
+        'Gleiches Label = gleicher Taster: Ein <strong>-S2 Öffner</strong> in Pfad 1 schaltet gleichzeitig mit dem -S2 Schließer in Pfad 3.',
+        'Pfad 1: A -F2 · B -S0 · C -S1 Schließer · D <strong>-S2 Öffner</strong> · E <strong>-K2 (21–22)</strong>.',
+        'Pfad 3: C -S2 Schließer · D <strong>-S1 Öffner</strong> · E <strong>-K1 (21–22)</strong>.',
+        'Die Schützverriegelung bleibt Pflicht! Sie schützt, falls ein Schütz mechanisch hängt (verschweißte Kontakte).'
+      ],
+      start: () => CHALLENGES[1].solution(),
+      solution: () => baseSelbsthaltung()
+        .put(1, 'D', 'btn_nc', 'S2').put(1, 'E', 'aux_nc', 'K2').out(1, 'coil_k1')
+        .put(3, 'C', 'btn_no', 'S2').put(3, 'D', 'btn_nc', 'S1').put(3, 'E', 'aux_nc', 'K1').out(3, 'coil_k2')
+        .put(4, 'C', 'aux_no', 'K2')
+        .bridge('2-3', 'B').bridge('3-4', 'B').bridge('3-4', 'C')
+        .done(),
+      tests: [
+        t('Ruhezustand: -K1 = 0, -K2 = 0', [], { K1: 0, K2: 0 }, 'Im Ruhezustand darf kein Schütz anziehen.'),
+        t('-S1 tasten → Rechtslauf -K1', [['tap', 'S1']], { K1: 1, K2: 0 }, 'Rechtslauf mit Selbsthaltung prüfen.'),
+        t('-S2 tasten → direkt Linkslauf: -K1 fällt ab, -K2 zieht an', [['tap', 'S2']], { K1: 0, K2: 1 },
+          'Tasterverriegelung fehlt: Der Öffner -S2 (11–12) muss in Reihe im Pfad von -K1 liegen – er trennt -K1, damit -K2 anziehen kann.'),
+        t('-S1 tasten → direkt zurück auf Rechtslauf', [['tap', 'S1']], { K1: 1, K2: 0 },
+          'Der Öffner -S1 (11–12) muss in Reihe im Pfad von -K2 liegen.'),
+        t('-S0 tasten → alles aus', [['tap', 'S0']], { K1: 0, K2: 0 }, '-S0 muss beide Zweige versorgen (Querbrücke 2↔3 nach Zeile B).'),
+        t('-S1 und -S2 gleichzeitig drücken → keiner zieht an', [['press', 'S1'], ['press', 'S2']], { K1: 0, K2: 0 },
+          'Beide Taster gedrückt: Jeder Öffner sperrt den anderen Zweig.'),
+        t('-K1 hängt mechanisch (verschweißt) → -K2 darf trotz -S2 NICHT anziehen',
+          [['release', 'S1'], ['release', 'S2'], ['tap', 'S0'], ['stick', 'K1'], ['tap', 'S2']], { K1: 1, K2: 0 },
+          'Nur Tasterverriegelung reicht nicht! Bei einem klebenden -K1 schützt allein der Öffner -K1 (21–22) im Pfad von -K2.'),
+        t('Überlast -F2 → alles aus', [['unstick', 'K1'], ['trip']], { K1: 0, K2: 0 }, '-F2 muss vor der Aufteilung liegen.')
+      ]
+    },
+    {
+      id: 'a4',
+      nr: 4,
+      mode: 'folge',
+      tab: '4 · Folgeschaltung',
+      title: 'Auftrag 4: Folgeschaltung – Förderband -K2 erst, wenn Absaugung -K1 läuft',
+      goal: 'In der Schreinerei darf das Förderband <strong>-K2</strong> (Start -S2) nur laufen, wenn die Absaugung <strong>-K1</strong> ' +
+        '(Start -S1) bereits läuft. Fällt die Absaugung aus (Überlast -F2), muss das Band sofort mit stoppen. -S0 stoppt beides.',
+      steps: [
+        'Pfad 1+2: Absaugung -K1 mit Selbsthaltung (wie Auftrag 1).',
+        'Pfad 3+4: Förderband -K2 mit -S2 Schließer und Selbsthaltung -K2 (13–14), Querbrücken 3↔4 nach B und C.',
+        'In Pfad 3 unterhalb der Selbsthaltung (Zeile D): <strong>Schließer -K1 (13–14)</strong> in Reihe = Folgeverriegelung.',
+        'Gemeinsame Versorgung über -F2 und -S0: Querbrücke 2↔3 nach Zeile B.'
+      ],
+      start: () => build().put(1, 'A', 'f2_nc', 'F2').put(1, 'B', 'btn_nc', 'S0').out(1, 'coil_k1').out(3, 'coil_k2').done(),
+      solution: () => baseSelbsthaltung().wires(1, 'DE').out(1, 'coil_k1')
+        .put(3, 'C', 'btn_no', 'S2').put(3, 'D', 'aux_no', 'K1').wires(3, 'E').out(3, 'coil_k2')
+        .put(4, 'C', 'aux_no', 'K2')
+        .bridge('2-3', 'B').bridge('3-4', 'B').bridge('3-4', 'C')
+        .done(),
+      tests: [
+        t('Ruhezustand: beide Motoren aus', [], { K1: 0, K2: 0 }, 'Im Ruhezustand darf kein Schütz anziehen.'),
+        t('-S2 tasten, Absaugung aus → Förderband darf NICHT starten', [['tap', 'S2']], { K1: 0, K2: 0 },
+          'Folgeverriegelung fehlt: Schließer -K1 (13–14) in Reihe in den Strompfad von -K2 setzen.'),
+        t('-S1 tasten → Absaugung -K1 läuft', [['tap', 'S1']], { K1: 1, K2: 0 }, 'Absaugung -K1 mit Selbsthaltung bauen.'),
+        t('-S2 tasten → Förderband -K2 läuft zusätzlich', [['tap', 'S2']], { K1: 1, K2: 1 },
+          'Förderband: -S2 Schließer + Selbsthaltung -K2 (13–14) parallel zu -S2, Versorgung über Querbrücke 2↔3.'),
+        t('Überlast -F2 an der Absaugung → Förderband stoppt mit', [['trip']], { K1: 0, K2: 0 },
+          'Der Schließer -K1 muss in Reihe UNTERHALB der -K2-Selbsthaltung sitzen – sonst hält sich -K2 weiter selbst.'),
+        t('-F2 zurück, beide starten, -S0 → beide aus', [['reset'], ['tap', 'S1'], ['tap', 'S2'], ['tap', 'S0']], { K1: 0, K2: 0 },
+          '-S0 muss vor der Aufteilung liegen und beide Pfade versorgen.')
+      ]
+    },
+    {
+      id: 'a5',
+      nr: 5,
+      mode: 'wende',
+      tab: '5 · Freies Brett',
+      sandbox: true,
+      title: 'Auftrag 5: Freies Montagebrett (Sandbox)',
+      goal: 'Bau, was du willst: Öffner, Schließer, Rastschalter -S3, Zeitrelais <strong>TON -K1T</strong> (zieht nach 2 s Dauerstrom an) ' +
+        'und <strong>TOFF -K2T</strong> (hält 3 s nach), <strong>RS-Flip-Flop -B1</strong> (Setzen über den eigenen Pfad, ' +
+        'Rücksetzen über den Nachbarpfad 1↔2 bzw. 3↔4, Reset-Vorrang) und Meldeleuchten.',
+      steps: [
+        'Kontakte eines Zeitrelais: Hilfskontakt mit Label -K1T bzw. -K2T (Klemmen 17–18 Schließer / 15–16 Öffner).',
+        'RS-Flip-Flop in Aktor-Zeile Pfad 3: S = Strom in Pfad 3, R = Strom in Pfad 4 (Pfad 4 ohne Aktor lassen).',
+        'Beispiel: Pfad 1 -S1 → TON -K1T, Pfad 2 -K1T (17–18) → Lampe -P1. -S1 gedrückt halten und 2 s warten!'
+      ],
+      start: () => emptyBoard(),
+      solution: () => build()
+        .put(1, 'A', 'btn_no', 'S1').wires(1, 'BCDE').out(1, 'timer_ton')
+        .put(2, 'A', 'aux_no', 'K1T').wires(2, 'BCDE').out(2, 'lamp_green')
+        .put(3, 'A', 'btn_no', 'S2').wires(3, 'BCDE').out(3, 'rs_ff')
+        .put(4, 'A', 'btn_no', 'S0').wires(4, 'BCDE')
+        .done(),
+      tests: []
+    }
+  ];
+
+  // --------------------------------------------------------------------------
+  // Laufzeit-Zustand & Engine
+  // --------------------------------------------------------------------------
+  function freshRuntime() {
+    const out = {};
+    OUT_LABELS.forEach(l => { out[l] = false; });
+    return {
+      pressed: { S0: false, S1: false, S2: false },
+      latched: { S3: false },
+      f2Tripped: false,
+      out,
+      stuck: {},
+      timers: { K1T: { since: null }, K2T: { wasOn: false, offAt: null } },
+      power: null,
+      shortSeen: false,
+      oscillating: false
+    };
+  }
+
+  function conducts(slot, rt) {
+    if (!slot) return false;
+    switch (slot.t) {
+      case 'wire': return true;
+      case 'f2_nc': return !rt.f2Tripped;
+      case 'btn_no': return !!rt.pressed[slot.l];
+      case 'btn_nc': return !rt.pressed[slot.l];
+      case 'sw_no': return !!rt.latched[slot.l];
+      case 'sw_nc': return !rt.latched[slot.l];
+      case 'aux_no': return !!rt.out[slot.l];
+      case 'aux_nc': return !rt.out[slot.l];
+      default: return false;
+    }
+  }
+
+  // Phase 1: Stromfluss über Union-Find (Kontakte sind in beide Richtungen leitend – wie echte Klemmstellen)
+  function computePower(board, rt) {
+    const per = ROWS + 1;
+    const TOP = COLS * per;
+    const parent = Array.from({ length: TOP + 1 }, (_, i) => i);
+    const find = x => {
+      while (parent[x] !== x) {
+        parent[x] = parent[parent[x]];
+        x = parent[x];
       }
-      case 'zweihand': {
-        q1 = I[0] && I[1];
-        break;
-      }
-      case 'wendeschuetz': {
-        // Zyklus wiederholen, bis die Rückmeldungen stabil sind
-        let a = prevQ[0];
-        let b = prevQ[1];
-        for (let n = 0; n < 4; n++) {
-          const na = I[0] && !b;
-          const nb = I[1] && !na;
-          if (na === a && nb === b) break;
-          a = na;
-          b = nb;
-        }
-        q1 = a;
-        q2 = b;
-        if (I[0] && q2) state.blocked = 'I1 GESPERRT: Q2 EIN';
-        else if (I[1] && q1) state.blocked = 'I2 GESPERRT: Q1 EIN';
-        break;
-      }
-      case 'selbsthaltung': {
-        if (I[1]) state.rs = false;      // Reset hat Vorrang
-        else if (I[0]) state.rs = true;
-        q1 = state.rs;
-        break;
-      }
-      case 'fup_sandbox': {
-        const fn = FUNCS[state.fupFn];
-        q1 = fn.unary ? fn.f(I[0]) : fn.f(I[0], I[1]);
-        break;
+      return x;
+    };
+    const union = (a, b) => { parent[find(a)] = find(b); };
+    const id = (c, l) => c * per + l;
+
+    for (let c = 0; c < COLS; c++) {
+      union(id(c, 0), TOP);
+      for (let r = 0; r < ROWS; r++) {
+        if (conducts(board.s[c][r], rt)) union(id(c, r), id(c, r + 1));
       }
     }
-
-    const next = [!!q1, !!q2];
-    next.forEach((on, i) => {
-      if (on !== prevQ[i]) {
-        state.outputs[i].active = on;
-        relayFeedback(i, on);
+    PAIRS.forEach(([a, b], p) => {
+      for (let l = 1; l <= ROWS; l++) {
+        if (board.b[p][l - 1]) union(id(a, l), id(b, l));
       }
     });
+    const top = find(TOP);
+    const live = [];
+    for (let c = 0; c < COLS; c++) {
+      live.push([]);
+      for (let l = 0; l <= ROWS; l++) live[c].push(find(id(c, l)) === top);
+    }
+    return live; // live[c][l]
+  }
+
+  function partnerOf(c) {
+    return c ^ 1; // 0↔1, 2↔3
+  }
+
+  // Sollzustand aller Ausgänge aus dem Stromfluss (inkl. Zeitrelais & Flip-Flop)
+  function computeDesired(board, rt, live, now) {
+    const d = {};
+    const coilPow = {};
+    OUT_LABELS.forEach(l => { d[l] = false; coilPow[l] = false; });
+    let ffSet = false, ffReset = false, hasFF = false;
+
+    board.o.forEach((o, c) => {
+      if (!o) return;
+      const inPow = live[c][ROWS];
+      const lbl = PARTS[o.t].out;
+      if (o.t === 'rs_ff') {
+        hasFF = true;
+        if (inPow) ffSet = true;
+        if (live[partnerOf(c)][ROWS] && !board.o[partnerOf(c)]) ffReset = true;
+      } else {
+        coilPow[lbl] = coilPow[lbl] || inPow;
+      }
+    });
+
+    ['K1', 'K2', 'K3', 'P1', 'P2'].forEach(l => { d[l] = coilPow[l]; });
+
+    // TON: Kontakte schalten erst nach 2 s ununterbrochenem Spulenstrom
+    const ton = rt.timers.K1T;
+    if (coilPow.K1T) {
+      if (ton.since === null) ton.since = now;
+      d.K1T = now - ton.since >= TON_MS;
+    } else {
+      ton.since = null;
+      d.K1T = false;
+    }
+
+    // TOFF: Kontakte schalten sofort, fallen erst 3 s nach Stromende ab
+    const toff = rt.timers.K2T;
+    if (coilPow.K2T) {
+      toff.wasOn = true;
+      toff.offAt = null;
+      d.K2T = true;
+    } else {
+      if (toff.wasOn) {
+        toff.wasOn = false;
+        toff.offAt = now;
+      }
+      if (toff.offAt !== null && now - toff.offAt >= TOFF_MS) toff.offAt = null;
+      d.K2T = toff.offAt !== null;
+    }
+
+    // RS-Flip-Flop mit Reset-Vorrang
+    if (hasFF) d.B1 = ffReset ? false : (ffSet ? true : rt.out.B1);
+
+    Object.keys(rt.stuck).forEach(l => { if (rt.stuck[l]) d[l] = true; });
+    return d;
+  }
+
+  // Phase 2: Pro Durchlauf genau EINE Änderung (Abfallen vor Anziehen) → bis stabil
+  function settle(board, rt, now, onStep) {
+    for (let iter = 0; iter < 64; iter++) {
+      const live = computePower(board, rt);
+      const d = computeDesired(board, rt, live, now);
+      let change = OUT_LABELS.find(l => rt.out[l] && !d[l]);
+      if (!change) change = OUT_LABELS.find(l => !rt.out[l] && d[l]);
+      if (!change) {
+        rt.power = live;
+        return true;
+      }
+      rt.out[change] = d[change];
+      if (onStep) onStep(rt);
+    }
+    rt.oscillating = true;
+    rt.power = computePower(board, rt);
+    return false;
+  }
+
+  function timersPending(rt) {
+    return (rt.timers.K1T.since !== null && !rt.out.K1T) || rt.timers.K2T.offAt !== null;
   }
 
   // --------------------------------------------------------------------------
-  // Relais-Klick (WebAudio, ohne externe Dateien)
+  // Automatischer Schaltungs-Prüfer (headless, virtuelle Uhr)
   // --------------------------------------------------------------------------
-  function playClick(on) {
-    if (!state.sound) return;
+  function checkChallenge(ch, board) {
+    const rt = freshRuntime();
+    let now = 0;
+    let shortHit = false;
+    const watch = r => {
+      if (ch.mode === 'wende' && r.out.K1 && r.out.K2) shortHit = true;
+    };
+    const run = () => {
+      settle(board, rt, now, watch);
+      now += 150;
+    };
+    const apply = ([act, arg]) => {
+      if (act === 'press') rt.pressed[arg] = true;
+      else if (act === 'release') rt.pressed[arg] = false;
+      else if (act === 'trip') rt.f2Tripped = true;
+      else if (act === 'reset') rt.f2Tripped = false;
+      else if (act === 'stick') rt.stuck[arg] = true;
+      else if (act === 'unstick') delete rt.stuck[arg];
+      if (act === 'tap') {
+        rt.pressed[arg] = true;
+        run();
+        rt.pressed[arg] = false;
+      }
+      run();
+    };
+
+    run();
+    const results = [];
+    for (const test of ch.tests) {
+      test.actions.forEach(apply);
+      const got = {};
+      let ok = true;
+      Object.keys(test.expect).forEach(k => {
+        got[k] = rt.out[k] ? 1 : 0;
+        if (got[k] !== test.expect[k]) ok = false;
+      });
+      const pass = ok && !shortHit && !rt.oscillating;
+      results.push({
+        label: test.label,
+        pass,
+        expect: test.expect,
+        got,
+        hint: shortHit ? SHORT_HINT : rt.oscillating ? OSC_HINT : test.hint
+      });
+      if (!pass) break;
+    }
+    const passed = results.length === ch.tests.length && results.every(r => r.pass);
+    return { passed, results };
+  }
+
+  // --------------------------------------------------------------------------
+  // Persistenz (Brett-Stand je Auftrag, gelöste Aufträge)
+  // --------------------------------------------------------------------------
+  const store = loadStore();
+
+  function loadStore() {
+    const def = { active: 'a1', boards: {}, solved: {}, peeked: {} };
     try {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (!Ctx) return;
-      if (!audioCtx) audioCtx = new Ctx();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      const t = audioCtx.currentTime;
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'square';
-      osc.frequency.setValueAtTime(on ? 1900 : 1300, t);
-      osc.frequency.exponentialRampToValueAtTime(220, t + 0.03);
-      gain.gain.setValueAtTime(0.06, t);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start(t);
-      osc.stop(t + 0.05);
-    } catch (e) {
-      // Audio ist optional – Fehler ignorieren
-    }
+      const raw = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+      if (raw && typeof raw === 'object') {
+        const s = Object.assign(def, raw);
+        Object.keys(s.boards).forEach(k => { if (!isValidBoard(s.boards[k])) delete s.boards[k]; });
+        if (!CHALLENGES.some(c => c.id === s.active)) s.active = 'a1';
+        return s;
+      }
+    } catch (e) { /* ignorieren */ }
+    return def;
   }
 
-  function relayFeedback(idx, on) {
-    playClick(on);
-    if (!els || !els.lamps[idx]) return;
-    const lamp = els.lamps[idx];
-    lamp.classList.remove('elogo-clack');
-    void lamp.offsetWidth; // Animation neu starten
-    lamp.classList.add('elogo-clack');
+  function saveStore() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(store));
+    } catch (e) { /* ignorieren */ }
+  }
+
+  function currentChallenge() {
+    return CHALLENGES.find(c => c.id === store.active) || CHALLENGES[0];
+  }
+
+  function currentBoard() {
+    const ch = currentChallenge();
+    if (!store.boards[ch.id]) store.boards[ch.id] = ch.start();
+    return store.boards[ch.id];
   }
 
   // --------------------------------------------------------------------------
-  // Preset / Eingänge
+  // UI-Zustand
   // --------------------------------------------------------------------------
-  function resetProgram() {
-    stopTimer();
-    state.inputs.forEach(inp => { inp.active = false; });
-    state.outputs.forEach(q => { q.active = false; });
-    state.prevI1 = false;
-    state.rs = false;
-    state.blocked = '';
-  }
+  let root = null;
+  let els = null;
+  let rt = freshRuntime();
+  let tool = null;
+  let tickHandle = null;
+  let lastCheck = null; // { passed, results, message }
+  let flash = '';
 
-  function setPreset(id) {
-    if (!PRESETS[id]) return;
-    state.preset = id;
-    resetProgram();
-    PRESETS[id].types.forEach((t, i) => { state.inputs[i].type = t; });
-    evaluate();
-    renderDynamic();
-    update();
-  }
-
-  function setFupFn(fn) {
-    if (!FUNCS[fn]) return;
-    state.fupFn = fn;
-    evaluate();
-    renderDynamic();
-    update();
-  }
-
-  function canChangeType(idx) {
-    return state.preset === 'fup_sandbox' || PRESETS[state.preset].roles[idx] === 'frei';
-  }
-
-  function toggleType(idx) {
-    if (!canChangeType(idx)) return;
-    const inp = state.inputs[idx];
-    inp.type = inp.type === 'push' ? 'switch' : 'push';
-    inp.active = false;
-    evaluate();
-    renderDynamic();
-    update();
-  }
-
-  function setInput(idx, active) {
-    const inp = state.inputs[idx];
-    if (!inp || inp.active === active) return;
-    inp.active = active;
-    evaluate();
-    update();
-  }
-
-  // --------------------------------------------------------------------------
-  // LCD-Inhalt
-  // --------------------------------------------------------------------------
-  function fmtSec(ms) {
-    return (ms / 1000).toFixed(1).padStart(4, '0');
-  }
-
-  function lcdMessage() {
-    const I = state.inputs.map(i => i.active);
-    const Q = state.outputs.map(q => q.active);
-    switch (state.preset) {
-      case 'treppenlicht':
-        if (state.timer.running) return 'LÜFTER NACHLAUF: ' + fmtSec(state.timer.remaining) + 's';
-        if (I[0]) return 'Q1 EIN · TASTER GEDRÜCKT';
-        return 'BEREIT · TOFF ' + fmtSec(state.timer.duration) + 's';
-      case 'zweihand':
-        if (Q[0]) return 'PRESSE AKTIV · Q1 EIN';
-        if (I[0]) return 'WARTE AUF I2 (RECHTS)';
-        if (I[1]) return 'WARTE AUF I1 (LINKS)';
-        return 'ZWEIHAND BEREIT';
-      case 'wendeschuetz':
-        if (state.blocked) return state.blocked;
-        if (Q[0]) return 'RECHTSLAUF ▶ K1 EIN';
-        if (Q[1]) return '◀ LINKSLAUF K2 EIN';
-        return 'MOTOR STILLSTAND';
-      case 'selbsthaltung':
-        if (I[0] && I[1]) return 'RESET-VORRANG! Q1 AUS';
-        if (Q[0]) return 'SELBSTHALTUNG · Q1 EIN';
-        return 'AUS · WARTE AUF START';
-      case 'fup_sandbox':
-        return state.fupFn + ' → Q1 = ' + (Q[0] ? '1' : '0');
-    }
-    return '';
-  }
-
-  function lcdMatrix() {
-    const digit = (on, ch) => `<span class="elogo-lcd-d${on ? ' is-inv' : ''}">${ch}</span>`;
-    return 'I:' + state.inputs.map((x, i) => digit(x.active, i + 1)).join('') +
-      '&nbsp;&nbsp;Q:' + state.outputs.map((q, i) => digit(q.active, i + 1)).join('');
-  }
-
-  // --------------------------------------------------------------------------
-  // FUP-Diagramm (SVG). Leitungen tragen data-sig und werden in update() eingefärbt.
-  // --------------------------------------------------------------------------
-  const VB_W = 400;
-
-  function wire(x1, y1, x2, y2, sig) {
-    return `<line class="elogo-w" data-sig="${sig}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
-  }
-
-  function neg(cx, cy, sig) {
-    return `<circle class="elogo-neg" data-sig="${sig}" cx="${cx}" cy="${cy}" r="4.5"/>`;
-  }
-
-  function tag(x, y, label, sig) {
-    return `<g class="elogo-tag" data-sig="${sig}">` +
-      `<rect x="${x}" y="${y - 11}" width="44" height="22" rx="4"/>` +
-      `<text x="${x + 22}" y="${y + 4.5}" text-anchor="middle">${label}</text></g>`;
-  }
-
-  // Allgemeiner Funktionsblock: Eingänge links, Ausgang rechts
-  function block(o) {
-    const bw = o.w || 70;
-    const outY = o.y + o.h / 2;
-    let s = '';
-    o.inputs.forEach(inp => {
-      s += tag(8, inp.y, inp.tag, inp.sig);
-      s += wire(52, inp.y, inp.neg ? o.x - 9 : o.x, inp.y, inp.sig);
-      if (inp.neg) s += neg(o.x - 4.5, inp.y, inp.sig);
-      if (inp.pin) s += `<text class="elogo-pin" x="${o.x + 5}" y="${inp.y + 4}">${inp.pin}</text>`;
+  function resettle() {
+    const board = currentBoard();
+    const mode = currentChallenge().mode;
+    rt.shortSeen = false;
+    rt.oscillating = false;
+    settle(board, rt, Date.now(), r => {
+      if (mode === 'wende' && r.out.K1 && r.out.K2) rt.shortSeen = true;
     });
-    s += `<text class="elogo-bid" x="${o.x + bw / 2}" y="${o.y - 6}" text-anchor="middle">${o.id}</text>`;
-    s += `<rect class="elogo-blk" data-sig="${o.out.sig}" x="${o.x}" y="${o.y}" width="${bw}" height="${o.h}" rx="3"/>`;
-    if (o.sym) {
-      s += `<text class="elogo-sym" x="${o.x + bw / 2}" y="${(o.symY || outY) + 9}" text-anchor="middle">${o.sym}</text>`;
-    }
-    if (o.inner) s += o.inner;
-    if (o.out.pin) {
-      s += `<text class="elogo-pin" x="${o.x + bw - 5}" y="${outY + 4}" text-anchor="end">${o.out.pin}</text>`;
-    }
-    const sx = o.out.neg ? o.x + bw + 9 : o.x + bw;
-    if (o.out.neg) s += neg(o.x + bw + 4.5, outY, o.out.sig);
-    s += wire(sx, outY, VB_W - 52, outY, o.out.sig);
-    s += tag(VB_W - 52, outY, o.out.tag, o.out.sig);
-    return s;
+    if (mode === 'wende' && rt.out.K1 && rt.out.K2) rt.shortSeen = true;
+    syncTick();
   }
 
-  function fupSvg() {
-    let h = 200;
-    let body = '';
-    switch (state.preset) {
-      case 'treppenlicht': {
-        const x = 150, y = 30, w = 110;
-        const inner =
-          // Zeitdiagramm-Symbol: kurzer Eingangsimpuls, verlängerter Ausgang
-          `<path class="elogo-glyph" d="M${x + 22} ${y + 34} h8 v-14 h10 v14 h30"/>` +
-          `<path class="elogo-glyph is-out" d="M${x + 22} ${y + 54} h8 v-14 h34 v14 h6"/>` +
-          `<text class="elogo-par" x="${x + w / 2}" y="${y + 78}" text-anchor="middle">T = ${fmtSec(TOFF_MS)}s</text>` +
-          `<text class="elogo-par is-live" data-text="ta" x="${x + w / 2}" y="${y + 96}" text-anchor="middle">Ta = 0.0s</text>` +
-          `<rect class="elogo-bar-bg" x="${x + 12}" y="${y + 106}" width="${w - 24}" height="6" rx="3"/>` +
-          `<rect class="elogo-bar" data-progress="${w - 24}" x="${x + 12}" y="${y + 106}" width="0" height="6" rx="3"/>`;
-        body = block({
-          id: 'B001 · TOFF', x, y, w, h: 140, inner,
-          inputs: [
-            { tag: 'I1', sig: 'I1', y: 70, pin: 'Trg' },
-            { tag: '0', sig: 'LOW', y: 130, pin: 'R' }
-          ],
-          out: { tag: 'Q1', sig: 'Q1', pin: 'Q' }
-        });
-        break;
-      }
-      case 'zweihand': {
-        body = block({
-          id: 'B001', x: 165, y: 40, h: 120, sym: '&',
-          inputs: [{ tag: 'I1', sig: 'I1', y: 70 }, { tag: 'I2', sig: 'I2', y: 130 }],
-          out: { tag: 'Q1', sig: 'Q1' }
-        });
-        break;
-      }
-      case 'wendeschuetz': {
-        h = 260;
-        body = block({
-          id: 'B001', x: 165, y: 22, h: 90, sym: '&',
-          inputs: [{ tag: 'I1', sig: 'I1', y: 45 }, { tag: 'Q2', sig: 'Q2', y: 89, neg: true }],
-          out: { tag: 'Q1', sig: 'Q1' }
-        }) + block({
-          id: 'B002', x: 165, y: 150, h: 90, sym: '&',
-          inputs: [{ tag: 'I2', sig: 'I2', y: 173 }, { tag: 'Q1', sig: 'Q1', y: 217, neg: true }],
-          out: { tag: 'Q2', sig: 'Q2' }
-        });
-        break;
-      }
-      case 'selbsthaltung': {
-        body = block({
-          id: 'B001 · RS', x: 160, y: 40, w: 80, h: 120, sym: 'RS', symY: 66,
-          inner: `<text class="elogo-par" x="200" y="146" text-anchor="middle">R-Vorrang</text>`,
-          inputs: [{ tag: 'I1', sig: 'I1', y: 70, pin: 'S' }, { tag: 'I2', sig: 'I2', y: 130, pin: 'R' }],
-          out: { tag: 'Q1', sig: 'Q1', pin: 'Q' }
-        });
-        break;
-      }
-      case 'fup_sandbox': {
-        const fn = FUNCS[state.fupFn];
-        const inputs = fn.unary
-          ? [{ tag: 'I1', sig: 'I1', y: 100 }]
-          : [{ tag: 'I1', sig: 'I1', y: 70 }, { tag: 'I2', sig: 'I2', y: 130 }];
-        body = block({
-          id: 'B001 · ' + state.fupFn, x: 165, y: 40, h: 120, sym: fn.sym,
-          inputs,
-          out: { tag: 'Q1', sig: 'Q1', neg: fn.neg }
-        });
-        break;
-      }
+  function syncTick() {
+    const need = timersPending(rt);
+    if (need && !tickHandle) {
+      tickHandle = setInterval(() => {
+        resettle();
+        renderDynamic();
+      }, TICK_MS);
+    } else if (!need && tickHandle) {
+      clearInterval(tickHandle);
+      tickHandle = null;
     }
-    return `<svg class="elogo-fup" viewBox="0 0 ${VB_W} ${h}" role="img" ` +
-      `aria-label="Funktionsplan ${PRESETS[state.preset].title}">${body}</svg>`;
   }
 
-  function truthTable() {
-    if (state.preset !== 'fup_sandbox') return '';
-    const fn = FUNCS[state.fupFn];
-    const a = state.inputs[0].active;
-    const b = state.inputs[1].active;
-    const rows = fn.unary ? [[false], [true]] : [[false, false], [false, true], [true, false], [true, true]];
-    const bit = v => (v ? '1' : '0');
-    const head = fn.unary ? '<th>I1</th><th>Q1</th>' : '<th>I1</th><th>I2</th><th>Q1</th>';
-    const body = rows.map(r => {
-      const cur = fn.unary ? r[0] === a : (r[0] === a && r[1] === b);
-      const q = fn.unary ? fn.f(r[0]) : fn.f(r[0], r[1]);
-      return `<tr class="${cur ? 'is-cur' : ''}">${r.map(v => `<td>${bit(v)}</td>`).join('')}` +
-        `<td class="${q ? 'is-hi' : ''}">${bit(q)}</td></tr>`;
-    }).join('');
-    return `<div class="elogo-tt"><div class="elogo-sub">Wahrheitstabelle · ${fn.name}</div>` +
-      `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+  function stopTick() {
+    if (tickHandle) clearInterval(tickHandle);
+    tickHandle = null;
+  }
+
+  // --------------------------------------------------------------------------
+  // SVG-Zeichnung des Bretts
+  // --------------------------------------------------------------------------
+  const VB_W = 540;
+  const COL_X = [110, 220, 330, 440];
+  const RAIL_TOP = 40;
+  const LEVEL_Y = l => 66 + l * 76; // l = 0 … 5
+  const RAIL_BOT = LEVEL_Y(ROWS) + 112;
+  const VB_H = RAIL_BOT + 26;
+  const C_LIVE = '#22c55e';
+  const C_DEAD = '#64748b';
+
+  function lineCol(on) {
+    return on ? C_LIVE : C_DEAD;
+  }
+
+  function seg(x1, y1, x2, y2, on, extra) {
+    return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${lineCol(on)}" stroke-width="${on ? 3.4 : 2.4}" ` +
+      `stroke-linecap="round" ${on ? 'class="sb-live"' : ''} ${extra || ''}/>`;
+  }
+
+  function chip(x, y, w, text, act, c, r, color) {
+    return `<g class="sb-chip" data-act="${act}" data-c="${c}" data-r="${r}" role="button" tabindex="0" aria-label="${text} umschalten">` +
+      `<rect x="${x}" y="${y}" width="${w}" height="15" rx="4" fill="#0f172a" stroke="${color}" stroke-width="1.3"/>` +
+      `<text x="${x + w / 2}" y="${y + 11}" text-anchor="middle" font-size="10" font-weight="800" fill="${color}">${text}</text></g>`;
+  }
+
+  function contactSvg(slot, c, r, live) {
+    const x = COL_X[c];
+    const y1 = LEVEL_Y(r), y2 = LEVEL_Y(r + 1);
+    const cy = (y1 + y2) / 2;
+    const topOn = live[c][r], botOn = live[c][r + 1];
+    let g = '';
+
+    if (!slot) {
+      return `<rect x="${x - 20}" y="${y1 + 10}" width="40" height="${y2 - y1 - 20}" rx="7" fill="none" stroke="#334155" ` +
+        `stroke-dasharray="4 4"/><text x="${x}" y="${cy + 5}" text-anchor="middle" font-size="16" fill="#334155">+</text>`;
+    }
+    if (slot.t === 'wire') {
+      return seg(x, y1, x, y2, topOn && botOn);
+    }
+
+    const def = PARTS[slot.t];
+    const closed = conducts(slot, rt);
+    const flowing = closed && topOn && botOn;
+    const tt = cy - 14, tb = cy + 14;
+    g += seg(x, y1, x, tt, topOn) + seg(x, tb, x, y2, botOn);
+
+    const bladeCol = flowing ? C_LIVE : '#e2e8f0';
+    if (def.nc) {
+      // Öffner: Haken am oberen Festkontakt
+      g += `<path d="M${x} ${tt} L${x} ${tt + 4} L${x + 10} ${tt + 4}" fill="none" stroke="${lineCol(topOn)}" stroke-width="2.4"/>`;
+    }
+    const tip = closed
+      ? (def.nc ? [x + 12, tt + 2] : [x, tt])
+      : [x - 11, tt + 3];
+    g += `<line x1="${x}" y1="${tb}" x2="${tip[0]}" y2="${tip[1]}" stroke="${bladeCol}" stroke-width="2.8" stroke-linecap="round"/>`;
+    g += `<circle cx="${x}" cy="${tb}" r="2.2" fill="${bladeCol}"/>`;
+
+    // Betätigungsart (DIN EN 60617): Taster, Rastschalter, Motorschutz (thermisch)
+    const midX = (x + tip[0]) / 2 - 2, midY = (tb + tip[1]) / 2;
+    if (def.act === 'push' || def.act === 'latch' || def.act === 'thermal') {
+      g += `<line x1="${midX}" y1="${midY}" x2="${x - 24}" y2="${midY}" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="3 2"/>`;
+      if (def.act === 'push') {
+        g += `<path d="M${x - 21} ${midY - 6} L${x - 24} ${midY - 6} L${x - 24} ${midY + 6} L${x - 21} ${midY + 6}" fill="none" stroke="#94a3b8" stroke-width="1.6"/>`;
+      } else if (def.act === 'latch') {
+        g += `<path d="M${x - 21} ${midY - 6} L${x - 24} ${midY - 6} L${x - 24} ${midY + 6} M${x - 24} ${midY + 2} L${x - 20} ${midY + 6}" fill="none" stroke="#94a3b8" stroke-width="1.6"/>`;
+      } else {
+        g += `<path d="M${x - 24} ${midY + 5} L${x - 24} ${midY - 5} L${x - 30} ${midY - 5} L${x - 30} ${midY + 5}" fill="none" stroke="${rt.f2Tripped ? '#f87171' : '#94a3b8'}" stroke-width="1.6"/>`;
+      }
+    }
+
+    const [tTop, tBot] = terminals(slot);
+    g += `<text x="${x - 6}" y="${tt - 2}" text-anchor="end" font-size="9" fill="#94a3b8">${tTop}</text>`;
+    g += `<text x="${x - 6}" y="${tb + 11}" text-anchor="end" font-size="9" fill="#94a3b8">${tBot}</text>`;
+
+    const lblColor = def.act === 'aux' ? '#c084fc' : def.act === 'thermal' ? '#fb923c' : '#38bdf8';
+    if (def.labels && def.labels.length > 1) g += chip(x + 13, cy - 18, 36, `-${slot.l}`, 'label', c, r, lblColor);
+    else g += `<text x="${x + 31}" y="${cy - 7}" text-anchor="middle" font-size="10" font-weight="800" fill="${lblColor}">-${slot.l}</text>`;
+    if (def.flip) g += chip(x + 13, cy + 2, 36, def.nc ? 'NC⇄' : 'NO⇄', 'flip', c, r, def.nc ? '#f87171' : '#34d399');
+    return g;
+  }
+
+  function outputSvg(o, c, live) {
+    const x = COL_X[c];
+    const y1 = LEVEL_Y(ROWS), y2 = RAIL_BOT;
+    const cy = (y1 + y2) / 2;
+    const inOn = live[c][ROWS];
+    if (!o) {
+      return `<rect x="${x - 22}" y="${y1 + 18}" width="44" height="${y2 - y1 - 36}" rx="7" fill="none" stroke="#334155" stroke-dasharray="4 4"/>` +
+        `<text x="${x}" y="${cy + 4}" text-anchor="middle" font-size="9.5" fill="#475569">Aktor</text>`;
+    }
+    const def = PARTS[o.t];
+    const on = !!rt.out[def.out];
+    let g = '';
+    const top = cy - 14, bot = cy + 14;
+    g += seg(x, y1, x, top, inOn) + `<line x1="${x}" y1="${bot}" x2="${x}" y2="${y2}" stroke="#3b82f6" stroke-width="2.4"/>`;
+
+    if (o.t === 'lamp_green' || o.t === 'lamp_red') {
+      const col = o.t === 'lamp_green' ? '#22c55e' : '#ef4444';
+      g += `<circle cx="${x}" cy="${cy}" r="14" fill="${on ? col : '#0f172a'}" fill-opacity="${on ? 0.85 : 1}" stroke="${on ? col : '#94a3b8'}" stroke-width="2.2" ${on ? 'class="sb-glow"' : ''}/>`;
+      g += `<path d="M${x - 10} ${cy - 10} L${x + 10} ${cy + 10} M${x + 10} ${cy - 10} L${x - 10} ${cy + 10}" stroke="${on ? '#0f172a' : '#94a3b8'}" stroke-width="1.6"/>`;
+      g += `<text x="${x - 18}" y="${top - 2}" text-anchor="end" font-size="9" fill="#94a3b8">X1</text>`;
+      g += `<text x="${x - 18}" y="${bot + 10}" text-anchor="end" font-size="9" fill="#94a3b8">X2</text>`;
+      g += chip(x + 18, cy - 8, 32, `-${def.out}`, 'label', c, 'o', col);
+      return g;
+    }
+
+    const isFF = o.t === 'rs_ff';
+    const w = isFF ? 44 : 38, h = isFF ? 34 : 28;
+    const fill = on ? 'rgba(34,197,94,0.25)' : '#0f172a';
+    const stroke = on ? C_LIVE : (inOn ? '#fbbf24' : '#94a3b8');
+    g += `<rect x="${x - w / 2}" y="${cy - h / 2}" width="${w}" height="${h}" rx="3" fill="${fill}" stroke="${stroke}" stroke-width="2.4" ${on ? 'class="sb-glow"' : ''}/>`;
+    if (o.t === 'timer_ton') {
+      g += `<rect x="${x - w / 2 - 9}" y="${cy - 7}" width="9" height="14" fill="${stroke}"/>`;
+    } else if (o.t === 'timer_toff') {
+      g += `<rect x="${x - w / 2 - 9}" y="${cy - 7}" width="9" height="14" fill="none" stroke="${stroke}" stroke-width="1.6"/>` +
+        `<path d="M${x - w / 2 - 9} ${cy - 7} l9 14 M${x - w / 2} ${cy - 7} l-9 14" stroke="${stroke}" stroke-width="1.2"/>`;
+    }
+    if (isFF) {
+      g += `<text x="${x - 16}" y="${cy - 3}" font-size="9.5" font-weight="800" fill="#cbd5e1">S</text>`;
+      g += `<text x="${x - 16}" y="${cy + 11}" font-size="9.5" font-weight="800" fill="#cbd5e1">R</text>`;
+      g += `<text x="${x + 6}" y="${cy + 4}" text-anchor="middle" font-size="10" font-weight="800" fill="${on ? '#bbf7d0' : '#f8fafc'}">${on ? 'Q=1' : 'Q=0'}</text>`;
+      g += `<text x="${x}" y="${cy + h / 2 + 12}" text-anchor="middle" font-size="8.5" fill="#94a3b8">R ← Pfad ${partnerOf(c) + 1}</text>`;
+    } else {
+      g += `<text x="${x}" y="${cy + 4}" text-anchor="middle" font-size="11" font-weight="800" fill="${on ? '#bbf7d0' : '#f8fafc'}">${def.out}</text>`;
+    }
+    g += `<text x="${x - w / 2 - (o.t.startsWith('timer') ? 12 : 3)}" y="${top - 2}" text-anchor="end" font-size="9" fill="#94a3b8">A1</text>`;
+    g += `<text x="${x - w / 2 - 3}" y="${bot + 10}" text-anchor="end" font-size="9" fill="#94a3b8">A2</text>`;
+
+    if (def.cycle) g += chip(x + w / 2 + 4, cy - 8, 38, `-${def.out}`, 'label', c, 'o', on ? C_LIVE : '#38bdf8');
+    else g += `<text x="${x + w / 2 + 6}" y="${cy + 4}" font-size="10" font-weight="800" fill="#38bdf8">-${def.out}</text>`;
+
+    // Zeitrelais: Restzeit anzeigen
+    const now = Date.now();
+    if (o.t === 'timer_ton' && rt.timers.K1T.since !== null && !rt.out.K1T) {
+      const rest = Math.max(0, TON_MS - (now - rt.timers.K1T.since)) / 1000;
+      g += `<text x="${x}" y="${cy + h / 2 + 12}" text-anchor="middle" font-size="9" font-weight="700" fill="#fbbf24">⏱ ${rest.toFixed(1)} s</text>`;
+    }
+    if (o.t === 'timer_toff' && rt.timers.K2T.offAt !== null) {
+      const rest = Math.max(0, TOFF_MS - (now - rt.timers.K2T.offAt)) / 1000;
+      g += `<text x="${x}" y="${cy + h / 2 + 12}" text-anchor="middle" font-size="9" font-weight="700" fill="#fbbf24">⏲ ${rest.toFixed(1)} s</text>`;
+    }
+    return g;
+  }
+
+  function bridgesSvg(board, live) {
+    let g = '';
+    PAIRS.forEach(([a, b], p) => {
+      for (let l = 1; l <= ROWS; l++) {
+        const y = LEVEL_Y(l);
+        const xa = COL_X[a], xb = COL_X[b];
+        const on = board.b[p][l - 1];
+        const isLive = on && live[a][l];
+        g += `<g class="sb-bridge ${on ? 'is-on' : ''}" data-act="bridge" data-p="${p}" data-l="${l}" role="button" tabindex="0" ` +
+          `aria-label="Querbrücke Pfad ${PAIR_KEYS[p]} nach Zeile ${ROW_NAMES[l - 1]} ${on ? 'entfernen' : 'setzen'}">` +
+          `<rect x="${xa + 8}" y="${y - 9}" width="${xb - xa - 16}" height="18" fill="transparent"/>`;
+        if (on) {
+          g += seg(xa, y, xb, y, isLive) +
+            `<circle cx="${xa}" cy="${y}" r="4.2" fill="${lineCol(isLive)}"/><circle cx="${xb}" cy="${y}" r="4.2" fill="${lineCol(isLive)}"/>`;
+        } else {
+          g += `<line x1="${xa + 10}" y1="${y}" x2="${xb - 10}" y2="${y}" stroke="#1e293b" stroke-width="2" stroke-dasharray="3 5" class="sb-bridge-ghost"/>` +
+            `<text x="${(xa + xb) / 2}" y="${y + 4}" text-anchor="middle" font-size="11" fill="#334155" class="sb-bridge-plus">⊕</text>`;
+        }
+        g += '</g>';
+      }
+    });
+    return g;
+  }
+
+  function boardSvg() {
+    const board = currentBoard();
+    const live = rt.power || computePower(board, rt);
+    let g = `<svg viewBox="0 0 ${VB_W} ${VB_H}" class="sb-board-svg" role="img" aria-label="Steckbrett mit 4 Strompfaden" ` +
+      'font-family="Consolas, \'Courier New\', monospace">';
+
+    // Spaltenköpfe & Zeilennamen
+    COL_X.forEach((x, c) => {
+      g += `<text x="${x}" y="18" text-anchor="middle" font-size="11" font-weight="800" fill="#94a3b8">Pfad ${c + 1}</text>`;
+    });
+    ROW_NAMES.forEach((n, r) => {
+      g += `<text x="44" y="${(LEVEL_Y(r) + LEVEL_Y(r + 1)) / 2 + 4}" text-anchor="middle" font-size="12" font-weight="800" fill="#475569">${n}</text>`;
+    });
+    g += `<text x="44" y="${(LEVEL_Y(ROWS) + RAIL_BOT) / 2 + 4}" text-anchor="middle" font-size="9.5" font-weight="800" fill="#475569">Aktor</text>`;
+
+    // Schienen
+    g += `<line x1="64" y1="${RAIL_TOP}" x2="${VB_W - 20}" y2="${RAIL_TOP}" stroke="#ef4444" stroke-width="5" stroke-linecap="round"/>`;
+    g += `<text x="8" y="${RAIL_TOP - 4}" font-size="10" font-weight="800" fill="#f87171">L1</text>`;
+    g += `<text x="8" y="${RAIL_TOP + 9}" font-size="9" font-weight="700" fill="#f87171">+24V</text>`;
+    g += `<line x1="64" y1="${RAIL_BOT}" x2="${VB_W - 20}" y2="${RAIL_BOT}" stroke="#3b82f6" stroke-width="5" stroke-linecap="round"/>`;
+    g += `<text x="8" y="${RAIL_BOT - 4}" font-size="10" font-weight="800" fill="#60a5fa">N</text>`;
+    g += `<text x="8" y="${RAIL_BOT + 9}" font-size="9" font-weight="700" fill="#60a5fa">0V</text>`;
+
+    COL_X.forEach((x, c) => {
+      g += seg(x, RAIL_TOP, x, LEVEL_Y(0), true);
+    });
+
+    // Steckplätze (Hit-Areas unter den Symbolen)
+    for (let c = 0; c < COLS; c++) {
+      for (let r = 0; r < ROWS; r++) {
+        const y1 = LEVEL_Y(r), y2 = LEVEL_Y(r + 1);
+        g += `<rect class="sb-slot" data-act="slot" data-c="${c}" data-r="${r}" x="${COL_X[c] - 46}" y="${y1 + 10}" width="100" height="${y2 - y1 - 20}" rx="8" ` +
+          `role="button" tabindex="0" aria-label="Steckplatz Pfad ${c + 1} Zeile ${ROW_NAMES[r]}"/>`;
+      }
+      g += `<rect class="sb-slot sb-slot-out" data-act="slot" data-c="${c}" data-r="o" x="${COL_X[c] - 46}" y="${LEVEL_Y(ROWS) + 12}" width="100" height="${RAIL_BOT - LEVEL_Y(ROWS) - 24}" rx="8" ` +
+        `role="button" tabindex="0" aria-label="Aktor-Steckplatz Pfad ${c + 1}"/>`;
+    }
+
+    g += bridgesSvg(board, live);
+
+    for (let c = 0; c < COLS; c++) {
+      for (let r = 0; r < ROWS; r++) g += `<g pointer-events="none">${contactSvg(board.s[c][r], c, r, live)}</g>`;
+      g += `<g pointer-events="none">${outputSvg(board.o[c], c, live)}</g>`;
+    }
+    // Chips wieder klickbar machen (liegen in pointer-events:none-Gruppen)
+    g += '</svg>';
+    return g.replace(/<g class="sb-chip"/g, '<g class="sb-chip" pointer-events="all"');
+  }
+
+  // --------------------------------------------------------------------------
+  // Hauptstromkreis-Visualisierung (Motor M 3~)
+  // --------------------------------------------------------------------------
+  function motorSvg(id, label, dir, sparks) {
+    const cls = sparks ? 'sb-rotor sb-shake' : dir === 1 ? 'sb-rotor sb-cw' : dir === -1 ? 'sb-rotor sb-ccw' : 'sb-rotor';
+    const ring = sparks ? '#ef4444' : dir ? C_LIVE : '#64748b';
+    return `<svg viewBox="0 0 120 120" class="sb-motor" role="img" aria-label="${label}">` +
+      `<circle cx="60" cy="60" r="44" fill="#0b1220" stroke="${ring}" stroke-width="4"/>` +
+      `<g class="${cls}" style="transform-origin:60px 60px;">` +
+      '<path d="M60 60 L60 24 A10 10 0 0 1 72 30 Z" fill="#334155"/>' +
+      '<path d="M60 60 L91 78 A10 10 0 0 1 80 88 Z" fill="#334155"/>' +
+      '<path d="M60 60 L29 78 A10 10 0 0 1 28 64 Z" fill="#334155"/>' +
+      '<circle cx="60" cy="60" r="8" fill="#94a3b8"/></g>' +
+      `<text x="60" y="66" text-anchor="middle" font-size="15" font-weight="900" fill="#f8fafc" font-family="Segoe UI, Arial">M</text>` +
+      `<text x="60" y="82" text-anchor="middle" font-size="10" font-weight="800" fill="#cbd5e1" font-family="Segoe UI, Arial">3~</text>` +
+      (sparks ? '<g class="sb-sparks"><path d="M20 20 l8 14 l-6 0 l8 14" stroke="#facc15" stroke-width="3" fill="none"/>' +
+        '<path d="M98 18 l-6 14 l6 0 l-8 14" stroke="#facc15" stroke-width="3" fill="none"/>' +
+        '<path d="M100 96 l-10 -6 l2 6 l-10 -6" stroke="#fb923c" stroke-width="3" fill="none"/>' +
+        '<path d="M18 98 l10 -8 l0 6 l10 -8" stroke="#fb923c" stroke-width="3" fill="none"/></g>' : '') +
+      `<text x="60" y="116" text-anchor="middle" font-size="9.5" font-weight="700" fill="#94a3b8" font-family="Segoe UI, Arial">${id}</text>` +
+      '</svg>';
   }
 
   // --------------------------------------------------------------------------
   // Rendering
   // --------------------------------------------------------------------------
-  function inputCard(i) {
-    const inp = state.inputs[i];
-    const role = PRESETS[state.preset].roles[i];
-    const isPush = inp.type === 'push';
-    const free = role === 'frei';
-    const control = isPush
-      ? `<button type="button" class="elogo-btn elogo-push" data-idx="${i}" aria-pressed="false" ` +
-        `aria-label="${inp.id} Taster (gedrückt halten)"><span class="elogo-push-cap"></span></button>`
-      : `<button type="button" class="elogo-btn elogo-switch" data-idx="${i}" aria-pressed="false" ` +
-        `aria-label="${inp.id} Kippschalter"><span class="elogo-lever"></span></button>`;
-    const typeBtn = canChangeType(i)
-      ? `<button type="button" class="elogo-type" data-type-idx="${i}" title="Eingangstyp wechseln">⇄ ${isPush ? 'Schalter' : 'Taster'}</button>`
-      : '';
-    return `<div class="elogo-in${free ? ' is-free' : ''}">
-        <div class="elogo-in-head"><span class="elogo-in-id">${inp.id}</span><span class="elogo-in-kind">${isPush ? 'Taster' : 'Schalter'}</span></div>
-        ${control}
-        <div class="elogo-in-role">${role}</div>
-        <div class="elogo-in-state" data-state-idx="${i}">0</div>
-        ${typeBtn}
-      </div>`;
+  function paletteIcon(id) {
+    const def = PARTS[id];
+    return `<span class="sb-pal-icon">${def.icon}</span>`;
   }
 
-  function lampCard(i) {
-    const label = PRESETS[state.preset].outputs[i];
-    return `<div class="elogo-out${label === '—' ? ' is-free' : ''}">
-        <div class="elogo-lamp elogo-lamp-${i + 1}" data-lamp="${i}"><span class="elogo-lamp-glass"></span></div>
-        <div class="elogo-out-id">Q${i + 1}</div>
-        <div class="elogo-out-role">${label === '—' ? 'frei' : label}</div>
-        <div class="elogo-out-contact" data-contact="${i}">Kontakt 1–2 offen</div>
-      </div>`;
+  function renderPalette() {
+    if (!els) return;
+    els.palette.innerHTML = PALETTE.map(id => {
+      const def = PARTS[id];
+      const isOut = def.kind === 'out';
+      return `<button type="button" class="sb-pal ${tool === id ? 'active' : ''} ${isOut ? 'is-out' : ''} ${id === 'open' ? 'is-erase' : ''}" ` +
+        `draggable="true" data-tool="${id}" title="${def.name} – ${def.hint}">` +
+        `${paletteIcon(id)}<span class="sb-pal-name">${def.name}</span><small>${def.hint}</small></button>`;
+    }).join('');
+  }
+
+  function renderChallenge() {
+    if (!els) return;
+    const ch = currentChallenge();
+    els.tabs.innerHTML = CHALLENGES.map(c =>
+      `<button type="button" class="sb-tab ${c.id === ch.id ? 'active' : ''}" data-ch="${c.id}">` +
+      `${store.solved[c.id] ? '✅ ' : ''}${c.tab}</button>`).join('');
+
+    let resultHtml = '';
+    if (lastCheck) {
+      resultHtml = `<div class="sb-results">` +
+        lastCheck.results.map((r, i) => {
+          const exp = Object.keys(r.expect).map(k => `-${k}=${r.expect[k]}`).join(' ');
+          const got = Object.keys(r.got).map(k => `-${k}=${r.got[k]}`).join(' ');
+          return `<div class="sb-res ${r.pass ? 'ok' : 'bad'}">` +
+            `<span>${r.pass ? '✅' : '❌'} Test ${i + 1}: ${r.label}</span>` +
+            (r.pass ? '' : `<small>Soll: ${exp} · Ist: ${got}</small><div class="sb-res-hint">💡 ${r.hint}</div>`) +
+            '</div>';
+        }).join('') +
+        (lastCheck.message ? `<div class="sb-res-msg ${lastCheck.passed ? 'ok' : 'bad'}">${lastCheck.message}</div>` : '') +
+        '</div>';
+    }
+
+    els.challenge.innerHTML = `
+      <h4 class="sb-ch-title">${ch.title}</h4>
+      <p class="sb-ch-goal">${ch.goal}</p>
+      <details class="sb-steps" ${ch.sandbox ? 'open' : ''}>
+        <summary>🧭 Bau-Hinweise (aufklappen, wenn du feststeckst)</summary>
+        <ol>${ch.steps.map(s => `<li>${s}</li>`).join('')}</ol>
+      </details>
+      <div class="sb-ch-actions">
+        ${ch.sandbox ? '' : `<button type="button" class="btn-primary btn-sm" data-cmd="check">🔍 Meine Schaltung prüfen (+${XP_REWARD} XP)</button>`}
+        <button type="button" class="btn-secondary btn-sm" data-cmd="solution">💡 ${ch.sandbox ? 'Beispiel (TON + RS-Flip-Flop) laden' : 'Musterlösung aufs Brett laden'}</button>
+        <button type="button" class="btn-secondary btn-sm" data-cmd="restart">↺ Auftrag neu starten</button>
+        <button type="button" class="btn-secondary btn-sm" data-cmd="clear">🧹 Brett leeren</button>
+      </div>
+      ${resultHtml}`;
   }
 
   function renderDynamic() {
     if (!els) return;
-    const p = PRESETS[state.preset];
-    els.presetBtns.forEach(b => {
-      const on = b.getAttribute('data-preset') === state.preset;
-      b.classList.toggle('is-active', on);
-      b.setAttribute('aria-pressed', on ? 'true' : 'false');
-    });
-    els.inputs.innerHTML = [0, 1, 2, 3].map(inputCard).join('');
-    els.outputs.innerHTML = [0, 1].map(lampCard).join('');
-    els.fupTitle.textContent = p.title;
-    els.fupFns.innerHTML = state.preset === 'fup_sandbox'
-      ? Object.keys(FUNCS).map(k =>
-        `<button type="button" class="elogo-fn${k === state.fupFn ? ' is-active' : ''}" data-fn="${k}">${k}</button>`).join('')
-      : '';
-    els.fup.innerHTML = fupSvg();
-    els.info.innerHTML = `<p>${p.desc}</p><p class="elogo-hint">💡 ${p.hint}</p>`;
+    els.board.innerHTML = boardSvg();
+    const ch = currentChallenge();
+    const o = rt.out;
 
-    els.lamps = Array.prototype.slice.call(els.outputs.querySelectorAll('[data-lamp]'));
-    els.contacts = Array.prototype.slice.call(els.outputs.querySelectorAll('[data-contact]'));
-    els.inBtns = Array.prototype.slice.call(els.inputs.querySelectorAll('.elogo-btn'));
-    els.inStates = Array.prototype.slice.call(els.inputs.querySelectorAll('[data-state-idx]'));
-    els.sigEls = Array.prototype.slice.call(els.fup.querySelectorAll('[data-sig]'));
-    els.taText = els.fup.querySelector('[data-text="ta"]');
-    els.bar = els.fup.querySelector('[data-progress]');
+    // Taster-Zustände im Bedien-Panel
+    els.panel.querySelectorAll('[data-btn]').forEach(b => {
+      const k = b.getAttribute('data-btn');
+      b.classList.toggle('is-down', !!rt.pressed[k]);
+    });
+    const f2 = els.panel.querySelector('[data-cmd="f2"]');
+    if (f2) {
+      f2.classList.toggle('is-tripped', rt.f2Tripped);
+      f2.innerHTML = rt.f2Tripped ? '🔥 -F2 ausgelöst → zurücksetzen' : '🔥 -F2 Überlast testen';
+    }
+    const s3 = els.panel.querySelector('[data-cmd="s3"]');
+    if (s3) {
+      s3.classList.toggle('is-down', rt.latched.S3);
+      s3.innerHTML = rt.latched.S3 ? '⏻ -S3 eingerastet' : '⏻ -S3 Rastschalter';
+    }
+
+    // Status-Chips
+    const present = new Set(['K1', 'K2', 'K3']);
+    currentBoard().o.forEach(x => { if (x) present.add(PARTS[x.t].out); });
+    currentBoard().s.forEach(col => col.forEach(sl => { if (sl && PARTS[sl.t].act === 'aux') present.add(sl.l); }));
+    els.status.innerHTML = OUT_LABELS.filter(l => present.has(l)).map(l =>
+      `<span class="sb-stat ${o[l] ? 'on' : ''} ${rt.stuck[l] ? 'stuck' : ''}">-${l} ${o[l] ? '● an' : '○ aus'}</span>`).join('');
+
+    // Hauptstromkreis
+    const both = o.K1 && o.K2;
+    if (ch.mode === 'folge') {
+      els.motor.innerHTML =
+        `<div class="sb-motors">${motorSvg('-K1 Absaugung', 'Absaugung', o.K1 ? 1 : 0, false)}` +
+        `${motorSvg('-K2 Förderband', 'Förderband', o.K2 ? 1 : 0, false)}</div>` +
+        '<small class="sb-motor-note">Folgeschaltung: zwei Motoren – -K2 darf nur laufen, wenn -K1 läuft.</small>';
+    } else {
+      const dir = both ? 0 : o.K1 ? 1 : o.K2 ? -1 : 0;
+      els.motor.innerHTML =
+        `<div class="sb-motors">${motorSvg(both ? '💥 KURZSCHLUSS' : o.K1 ? '↻ Rechtslauf (-K1)' : o.K2 ? '↺ Linkslauf (-K2)' : 'Stillstand', 'Drehstrommotor', dir, both)}</div>` +
+        '<small class="sb-motor-note">Hauptstrom: -K1 legt L1→U, L2→V, L3→W (Rechtsdrehfeld) · -K2 tauscht L1 ↔ L3 (Linksdrehfeld).</small>';
+    }
+
+    // Alarm-Banner
+    let alert = '';
+    if (ch.mode === 'wende' && both) {
+      alert = `<div class="sim-alert sim-alert-danger sb-alert">⚡💥 <strong>Kurzschluss im Hauptstromkreis!</strong> -K1 und -K2 sind gleichzeitig angezogen – ` +
+        `L1 und L3 werden über die Hauptkontakte direkt kurzgeschlossen. ${missingInterlockText()}</div>`;
+    } else if (ch.mode === 'wende' && rt.shortSeen) {
+      alert = '<div class="sim-alert sim-alert-warn sb-alert">⚡ Kurzzeitig waren -K1 und -K2 gleichzeitig an – das reicht für einen Kurzschluss! ' +
+        `${missingInterlockText()}</div>`;
+    } else if (rt.oscillating) {
+      alert = `<div class="sim-alert sim-alert-warn sb-alert">${OSC_HINT}</div>`;
+    } else if (rt.f2Tripped) {
+      alert = '<div class="sim-alert sim-alert-warn sb-alert">🔥 Motorschutz -F2 hat ausgelöst – Öffner 95–96 ist offen. Zum Weiterarbeiten zurücksetzen.</div>';
+    }
+    els.alert.innerHTML = alert;
+    els.flash.textContent = flash;
   }
 
-  function update() {
-    if (!els) return;
-    const sig = {
-      I1: state.inputs[0].active,
-      I2: state.inputs[1].active,
-      I3: state.inputs[2].active,
-      I4: state.inputs[3].active,
-      Q1: state.outputs[0].active,
-      Q2: state.outputs[1].active
-    };
+  function missingInterlockText() {
+    const all = [];
+    currentBoard().s.forEach(col => col.forEach(sl => { if (sl) all.push(sl); }));
+    const hasK2nc = all.some(s => s.t === 'aux_nc' && s.l === 'K2');
+    const hasK1nc = all.some(s => s.t === 'aux_nc' && s.l === 'K1');
+    const tips = [];
+    if (!hasK2nc) tips.push('Öffner <strong>-K2 (21–22)</strong> in Reihe vor die Spule -K1');
+    if (!hasK1nc) tips.push('Öffner <strong>-K1 (21–22)</strong> in Reihe vor die Spule -K2');
+    return tips.length
+      ? `Es fehlt: ${tips.join(' und ')}.`
+      : 'Die Öffner -K1/-K2 (21–22) sind da – sitzen sie wirklich in Reihe im JEWEILS ANDEREN Pfad (und nicht parallel)?';
+  }
 
-    // Eingänge
-    els.inBtns.forEach(btn => {
-      const i = +btn.getAttribute('data-idx');
-      const on = state.inputs[i].active;
-      btn.classList.toggle('is-on', on);
-      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-    });
-    els.inStates.forEach(el => {
-      const on = state.inputs[+el.getAttribute('data-state-idx')].active;
-      el.textContent = on ? '1 · 230 V' : '0 · 0 V';
-      el.classList.toggle('is-on', on);
-    });
+  function renderAllParts() {
+    renderPalette();
+    renderChallenge();
+    renderDynamic();
+  }
 
-    // Ausgänge
-    els.lamps.forEach((lamp, i) => lamp.classList.toggle('is-on', state.outputs[i].active));
-    els.contacts.forEach((c, i) => {
-      c.textContent = state.outputs[i].active ? 'Kontakt 1–2 geschlossen' : 'Kontakt 1–2 offen';
-    });
-    els.ledRun.classList.add('is-on');
+  // --------------------------------------------------------------------------
+  // Bedienung: Bauen
+  // --------------------------------------------------------------------------
+  function boardChanged(msg) {
+    flash = msg || '';
+    lastCheck = null;
+    saveStore();
+    resettle();
+    renderChallenge();
+    renderDynamic();
+  }
 
-    // LCD
-    els.lcd1.textContent = 'LOGO! 230RCE · RUN';
-    els.lcd2.innerHTML = lcdMatrix();
-    els.lcd3.textContent = lcdMessage();
-    els.lcd3.classList.toggle('is-alert', !!state.blocked ||
-      (state.preset === 'selbsthaltung' && sig.I1 && sig.I2));
-
-    // FUP-Signalpfade
-    els.sigEls.forEach(el => el.classList.toggle('is-hi', !!sig[el.getAttribute('data-sig')]));
-    if (els.taText) {
-      els.taText.textContent = 'Ta = ' + fmtSec(state.timer.running ? state.timer.remaining : 0) + 's';
+  function placeTool(c, r, toolId) {
+    const board = currentBoard();
+    const isOutSlot = r === 'o';
+    const where = `Pfad ${c + 1} / ${isOutSlot ? 'Aktor-Zeile' : `Zeile ${ROW_NAMES[r]}`}`;
+    if (toolId === 'open') {
+      if (isOutSlot) board.o[c] = null;
+      else board.s[c][r] = null;
+      boardChanged(`⌫ Steckplatz ${where} geleert.`);
+      return;
     }
-    if (els.bar) {
-      const full = +els.bar.getAttribute('data-progress');
-      const ratio = state.timer.running ? state.timer.remaining / state.timer.duration
-        : (sig.I1 && state.preset === 'treppenlicht' ? 1 : 0);
-      els.bar.setAttribute('width', (full * ratio).toFixed(1));
+    const def = PARTS[toolId];
+    if (def.kind === 'out' && !isOutSlot) {
+      flash = '⚠️ Spulen, Zeitrelais, Flip-Flops und Leuchten gehören in die Aktor-Zeile ganz unten (direkt vor N / 0 V).';
+      renderDynamic();
+      return;
     }
+    if (def.kind === 'contact' && isOutSlot) {
+      flash = '⚠️ Kontakte und Drahtbrücken gehören in die Zeilen A–E. Die Aktor-Zeile ist für Spulen & Leuchten.';
+      renderDynamic();
+      return;
+    }
+    if (isOutSlot) {
+      board.o[c] = { t: toolId };
+      boardChanged(`✅ ${def.name} (A1–A2) in ${where} gesetzt.`);
+    } else {
+      const prev = board.s[c][r];
+      // Gleiches Bauteil nochmal antippen → Bezeichnung weiterschalten
+      if (prev && prev.t === toolId && def.labels && def.labels.length > 1) {
+        cycleLabel(c, r);
+        return;
+      }
+      board.s[c][r] = { t: toolId, l: DEFAULT_LABEL[toolId] || '' };
+      const tm = terminals(board.s[c][r]);
+      boardChanged(`✅ ${def.name}${board.s[c][r].l ? ` -${board.s[c][r].l}` : ''}${tm[0] ? ` (${tm[0]}–${tm[1]})` : ''} in ${where} gesetzt.`);
+    }
+  }
 
-    // Wahrheitstabelle
-    els.tt.innerHTML = truthTable();
+  function cycleLabel(c, r) {
+    const board = currentBoard();
+    if (r === 'o') {
+      const o = board.o[c];
+      if (!o || !PARTS[o.t].cycle) return;
+      o.t = PARTS[o.t].cycle;
+      boardChanged(`🔁 Aktor in Pfad ${c + 1} ist jetzt ${PARTS[o.t].name}.`);
+      return;
+    }
+    const sl = board.s[c][r];
+    if (!sl) return;
+    const labels = PARTS[sl.t].labels || [];
+    if (labels.length < 2) return;
+    sl.l = labels[(labels.indexOf(sl.l) + 1) % labels.length];
+    const tm = terminals(sl);
+    boardChanged(`🔁 Kontakt Pfad ${c + 1} / Zeile ${ROW_NAMES[r]} gehört jetzt zu -${sl.l} (${tm[0]}–${tm[1]}).`);
+  }
+
+  function flipContact(c, r) {
+    const sl = currentBoard().s[c][r];
+    if (!sl || !PARTS[sl.t].flip) return;
+    sl.t = PARTS[sl.t].flip;
+    const tm = terminals(sl);
+    boardChanged(`⇄ Pfad ${c + 1} / Zeile ${ROW_NAMES[r]}: jetzt ${PARTS[sl.t].nc ? 'Öffner (NC)' : 'Schließer (NO)'} ${tm[0]}–${tm[1]}.`);
+  }
+
+  function toggleBridge(p, l) {
+    const board = currentBoard();
+    board.b[p][l - 1] = !board.b[p][l - 1];
+    boardChanged(`${board.b[p][l - 1] ? '🔗 Querbrücke gesetzt' : '✂️ Querbrücke entfernt'}: Pfad ${PAIR_KEYS[p].replace('-', '↔')} nach Zeile ${ROW_NAMES[l - 1]}.`);
+  }
+
+  function handleBoardAction(target) {
+    const act = target.getAttribute('data-act');
+    if (act === 'bridge') {
+      toggleBridge(+target.getAttribute('data-p'), +target.getAttribute('data-l'));
+      return;
+    }
+    const c = +target.getAttribute('data-c');
+    const rAttr = target.getAttribute('data-r');
+    const r = rAttr === 'o' ? 'o' : +rAttr;
+    if (act === 'label') cycleLabel(c, r);
+    else if (act === 'flip') flipContact(c, r);
+    else if (act === 'slot') {
+      if (tool) {
+        placeTool(c, r, tool);
+      } else {
+        const filled = r === 'o' ? currentBoard().o[c] : currentBoard().s[c][r];
+        flash = filled
+          ? '💡 Bezeichnung & Kontaktart über die kleinen Chips ändern – oder links ein Bauteil wählen und den Platz neu belegen.'
+          : '👉 Erst ein Bauteil im Werkzeugkasten antippen, dann den Steckplatz.';
+        renderDynamic();
+      }
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Bedienung: Testen, Prüfen, Aufträge
+  // --------------------------------------------------------------------------
+  function setPressed(key, down) {
+    if (rt.pressed[key] === down) return;
+    rt.pressed[key] = down;
+    resettle();
+    renderDynamic();
+  }
+
+  function powerCycle() {
+    rt = freshRuntime();
+    resettle();
+  }
+
+  function selectChallenge(id) {
+    if (!CHALLENGES.some(c => c.id === id)) return;
+    store.active = id;
+    saveStore();
+    lastCheck = null;
+    flash = '';
+    powerCycle();
+    renderAllParts();
+  }
+
+  function runCheck() {
+    const ch = currentChallenge();
+    if (ch.sandbox) return;
+    const res = checkChallenge(ch, currentBoard());
+    let message = '';
+    if (res.passed) {
+      if (store.peeked[ch.id]) {
+        message = '🎉 Alle Tests bestanden – aber mit Musterlösung. Keine XP: „↺ Auftrag neu starten“ und selbst bauen!';
+      } else if (store.solved[ch.id]) {
+        message = '🎉 Alle Tests bestanden! (Die +50 XP gab es schon beim ersten Mal.)';
+      } else {
+        store.solved[ch.id] = true;
+        saveStore();
+        message = `🎉 Alle ${ch.tests.length} Tests bestanden – Prüfungsreif! +${XP_REWARD} XP`;
+        if (window.ElektroApp && window.ElektroApp.addXp) window.ElektroApp.addXp(XP_REWARD);
+      }
+      confetti();
+    } else {
+      const failed = res.results.find(r => !r.pass);
+      message = `Noch nicht ganz: Test ${res.results.indexOf(failed) + 1} von ${ch.tests.length} schlägt fehl. Lies den Tipp, bau um und prüf nochmal!`;
+    }
+    lastCheck = Object.assign(res, { message });
+    renderChallenge();
+  }
+
+  function loadBoard(board, peek, msg) {
+    const ch = currentChallenge();
+    store.boards[ch.id] = board;
+    if (peek) store.peeked[ch.id] = true;
+    else delete store.peeked[ch.id];
+    powerCycle();
+    boardChanged(msg);
+  }
+
+  function confetti() {
+    if (!root || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+    const host = root.querySelector('.sb');
+    if (!host) return;
+    const layer = document.createElement('div');
+    layer.className = 'sb-confetti';
+    const colors = ['#22c55e', '#10b981', '#34d399', '#a7f3d0', '#facc15'];
+    for (let i = 0; i < 70; i++) {
+      const p = document.createElement('i');
+      p.style.left = Math.random() * 100 + '%';
+      p.style.background = colors[i % colors.length];
+      p.style.animationDelay = (Math.random() * 0.6).toFixed(2) + 's';
+      p.style.animationDuration = (1.6 + Math.random() * 1.2).toFixed(2) + 's';
+      p.style.transform = `rotate(${Math.round(Math.random() * 360)}deg)`;
+      layer.appendChild(p);
+    }
+    host.appendChild(layer);
+    setTimeout(() => layer.remove(), 3200);
+  }
+
+  // --------------------------------------------------------------------------
+  // render / destroy
+  // --------------------------------------------------------------------------
+  let listeners = [];
+
+  function on(el, type, handler, opts) {
+    el.addEventListener(type, handler, opts);
+    listeners.push([el, type, handler, opts]);
   }
 
   function render(containerEl) {
@@ -607,365 +1161,285 @@ window.ElektroLogo = (function () {
     ensureStyles();
     root = el;
 
-    const screw = label => `<div class="elogo-term"><span class="elogo-screw"></span><span>${label}</span></div>`;
-
     root.innerHTML = `
-      <div class="elogo sim-card">
-        <div class="elogo-header">
+      <div class="sb sim-card">
+        <div class="sb-header">
           <div>
-            <span class="elogo-badge">Kleinsteuerung · FUP nach DIN EN 60617 / IEC 61131-3</span>
-            <h3>📟 Siemens LOGO! 8 – Steuerungs-Labor</h3>
-          </div>
-          <div class="elogo-header-btns">
-            <button type="button" class="elogo-mini" data-action="sound" aria-pressed="${state.sound}">${state.sound ? '🔊 Klick an' : '🔇 Klick aus'}</button>
-            <button type="button" class="elogo-mini" data-action="reset" title="Programm neu starten (STOP → RUN)">⟲ Neustart</button>
+            <span class="badge badge-emerald">Steuerungstechnik · Stromlaufplan in aufgelöster Darstellung (DIN EN 61082)</span>
+            <h3>🛠️ Interaktives Schütz- & Steuerungs-Brett – Selber bauen & testen</h3>
           </div>
         </div>
 
-        <div class="elogo-presets" role="group" aria-label="Programm wählen">
-          ${Object.keys(PRESETS).map(id =>
-            `<button type="button" class="elogo-preset" data-preset="${id}">${PRESETS[id].btn}</button>`).join('')}
-        </div>
+        <div class="sb-tabs" role="tablist" aria-label="Bauaufträge"></div>
+        <div class="sb-challenge"></div>
 
-        <div class="elogo-grid">
-          <div class="elogo-col">
-            <div class="elogo-device">
-              <div class="elogo-terms">${screw('L1')}${screw('N')}${screw('I1')}${screw('I2')}${screw('I3')}${screw('I4')}</div>
-              <div class="elogo-face">
-                <div class="elogo-brand">
-                  <span class="elogo-siemens">SIEMENS</span>
-                  <span class="elogo-name">LOGO!<sup>8</sup></span>
-                </div>
-                <div class="elogo-screen-row">
-                  <div class="elogo-lcd" aria-live="polite">
-                    <div class="elogo-lcd-row" data-lcd="1"></div>
-                    <div class="elogo-lcd-row" data-lcd="2"></div>
-                    <div class="elogo-lcd-row" data-lcd="3"></div>
-                  </div>
-                  <div class="elogo-keys" aria-hidden="true">
-                    <span>ESC</span><span>▲</span><span>OK</span>
-                    <span>◄</span><span>▼</span><span>►</span>
-                  </div>
-                </div>
-                <div class="elogo-plate">
-                  <span class="elogo-led" data-led="run"></span> RUN/STOP
-                  <span class="elogo-plate-type">230RCE · 6ED1052-1FB08-0BA1</span>
-                </div>
+        <div class="sb-grid">
+          <div class="sb-build">
+            <div class="sb-pal-head">🧰 Werkzeugkasten <small>Bauteil wählen → Steckplatz antippen · PC: auch Drag & Drop · ⊕ = Querbrücke</small></div>
+            <div class="sb-palette"></div>
+            <div class="sb-board"></div>
+            <div class="sb-flash" aria-live="polite"></div>
+          </div>
+          <div class="sb-side">
+            <div class="sb-panel">
+              <div class="sb-panel-title">🎛️ Bedien-Panel (gedrückt halten = Taster betätigt)</div>
+              <div class="sb-btns">
+                <button type="button" class="sb-test sb-test-stop" data-btn="S0">🔴 -S0 (Stopp) drücken</button>
+                <button type="button" class="sb-test" data-btn="S1">▶️ -S1 (Rechts/Ein) drücken</button>
+                <button type="button" class="sb-test" data-btn="S2">◀️ -S2 (Links) drücken</button>
+                <button type="button" class="sb-test sb-test-f2" data-cmd="f2">🔥 -F2 Überlast testen</button>
+                <button type="button" class="sb-test sb-test-s3" data-cmd="s3">⏻ -S3 Rastschalter</button>
+                <button type="button" class="sb-test sb-test-off" data-cmd="power">⏼ Steuerspannung aus/ein</button>
               </div>
-              <div class="elogo-terms">${screw('Q1·1')}${screw('Q1·2')}${screw('Q2·1')}${screw('Q2·2')}</div>
+              <div class="sb-status" aria-live="polite"></div>
             </div>
-
-            <div class="elogo-sub">Relaisausgänge · Leuchtmelder</div>
-            <div class="elogo-outs" data-el="outputs"></div>
-          </div>
-
-          <div class="elogo-col">
-            <div class="elogo-fup-card">
-              <div class="elogo-fup-head">
-                <span>📐 <span data-el="fupTitle"></span></span>
-                <span class="elogo-legend"><span><i class="hi"></i>1 / High</span><span><i></i>0 / Low</span><span><i class="neg"></i>Negation</span></span>
-              </div>
-              <div class="elogo-fns" data-el="fupFns"></div>
-              <div data-el="fup"></div>
-              <div data-el="tt"></div>
-            </div>
-            <div class="elogo-info" data-el="info"></div>
+            <div class="sb-motor-box"></div>
+            <div class="sb-alert-box" aria-live="assertive"></div>
           </div>
         </div>
 
-        <div class="elogo-sub">Eingänge · 230 V AC (Kippschalter = rastend, Taster = gedrückt halten)</div>
-        <div class="elogo-ins" data-el="inputs"></div>
-      </div>
-    `;
+        <details class="sb-info">
+          <summary>📘 So funktioniert das Brett (Regeln, Klemmen, Engine)</summary>
+          <ul>
+            <li><strong>Ruhezustand:</strong> Gezeichnet und gebaut wird unbetätigt. Öffner (NC) leiten in Ruhe, Schließer (NO) sind offen. Ein <em>leerer</em> Steckplatz ist eine Unterbrechung – durchgehende Leitung = Drahtbrücke │.</li>
+            <li><strong>Gleiche Bezeichnung = gleiches Gerät:</strong> Alle Kontakte mit -S1 schalten beim Drücken von -S1 gleichzeitig (Tasterverriegelung). Alle Hilfskontakte -K1 schalten, sobald die Spule -K1 angezogen hat.</li>
+            <li><strong>Querbrücken ⊕</strong> verbinden zwei Nachbarpfade auf gleicher Höhe. Zwei Brücken (oberhalb und unterhalb) machen aus zwei Kontakten eine Parallelschaltung – z. B. Selbsthaltung -K1 (13–14) ∥ -S1.</li>
+            <li><strong>Klemmen:</strong> 13–14 Schließer · 11–12 / 21–22 Öffner · 95–96 Motorschutz-Öffner · A1–A2 Spule · 17–18 / 15–16 Zeitrelais-Kontakte · X1–X2 Leuchte.</li>
+            <li><strong>Zeitrelais:</strong> TON -K1T schaltet seine Kontakte nach 2 s Dauerstrom · TOFF -K2T schaltet sofort und hält 3 s nach. <strong>RS-Flip-Flop -B1:</strong> S = Strom im eigenen Pfad, R = Strom im Nachbarpfad (ohne Aktor), Reset hat Vorrang.</li>
+            <li><strong>2-Phasen-Engine:</strong> 1. Stromfluss von L1 durch alle leitenden Kontakte & Brücken berechnen · 2. genau eine Spule umschalten (Abfallen vor Anziehen) · wiederholen, bis nichts mehr schaltet. So funktionieren Selbsthaltung, Verriegelung und Wettlauf-Effekte wie im echten Schaltschrank.</li>
+          </ul>
+        </details>
+      </div>`;
 
-    const q = sel => root.querySelector(sel);
     els = {
-      presetBtns: Array.prototype.slice.call(root.querySelectorAll('[data-preset]')),
-      inputs: q('[data-el="inputs"]'),
-      outputs: q('[data-el="outputs"]'),
-      fup: q('[data-el="fup"]'),
-      fupFns: q('[data-el="fupFns"]'),
-      fupTitle: q('[data-el="fupTitle"]'),
-      tt: q('[data-el="tt"]'),
-      info: q('[data-el="info"]'),
-      lcd1: q('[data-lcd="1"]'),
-      lcd2: q('[data-lcd="2"]'),
-      lcd3: q('[data-lcd="3"]'),
-      ledRun: q('[data-led="run"]'),
-      soundBtn: q('[data-action="sound"]'),
-      lamps: [], contacts: [], inBtns: [], inStates: [], sigEls: [], taText: null, bar: null
+      tabs: root.querySelector('.sb-tabs'),
+      challenge: root.querySelector('.sb-challenge'),
+      palette: root.querySelector('.sb-palette'),
+      board: root.querySelector('.sb-board'),
+      flash: root.querySelector('.sb-flash'),
+      panel: root.querySelector('.sb-panel'),
+      status: root.querySelector('.sb-status'),
+      motor: root.querySelector('.sb-motor-box'),
+      alert: root.querySelector('.sb-alert-box')
     };
 
-    bindEvents();
-    // Eingangstypen an das Preset angleichen (ohne Programm-Reset bei erneutem render)
-    PRESETS[state.preset].types.forEach((t, i) => {
-      if (!canChangeType(i)) state.inputs[i].type = t;
+    // Aufträge & Befehle
+    on(els.tabs, 'click', e => {
+      const b = e.target.closest('[data-ch]');
+      if (b) selectChallenge(b.getAttribute('data-ch'));
     });
-    state.inputs.forEach(inp => { if (inp.type === 'push') inp.active = false; });
-    renderDynamic();
-    evaluate();
-    update();
-    if (state.timer.running && tickId === null) tickId = setInterval(tick, TICK_MS);
-  }
+    on(els.challenge, 'click', e => {
+      const b = e.target.closest('[data-cmd]');
+      if (!b) return;
+      const cmd = b.getAttribute('data-cmd');
+      const ch = currentChallenge();
+      if (cmd === 'check') runCheck();
+      else if (cmd === 'solution') loadBoard(ch.solution(), !ch.sandbox, ch.sandbox ? '💡 Beispiel geladen: -S1 gedrückt halten (TON 2 s), -S2 setzt -B1, -S0 setzt zurück.' : '💡 Musterlösung geladen – teste sie mit dem Bedien-Panel und vergleiche mit deinem Aufbau.');
+      else if (cmd === 'restart') loadBoard(ch.start(), false, '↺ Auftrag neu gestartet.');
+      else if (cmd === 'clear') loadBoard(emptyBoard(), false, '🧹 Brett geleert – bau los!');
+    });
 
-  // --------------------------------------------------------------------------
-  // Events (Delegation am Container, damit renderDynamic() nichts neu binden muss)
-  // --------------------------------------------------------------------------
-  function on(type, handler) {
-    root.addEventListener(type, handler);
-    listeners.push([type, handler]);
-  }
+    // Werkzeugkasten
+    on(els.palette, 'click', e => {
+      const b = e.target.closest('[data-tool]');
+      if (!b) return;
+      const id = b.getAttribute('data-tool');
+      tool = tool === id ? null : id;
+      flash = tool ? `🧰 ${PARTS[tool].name} gewählt – jetzt einen Steckplatz antippen.` : '';
+      renderPalette();
+      renderDynamic();
+    });
+    on(els.palette, 'dragstart', e => {
+      const b = e.target.closest('[data-tool]');
+      if (!b || !e.dataTransfer) return;
+      e.dataTransfer.setData('text/plain', b.getAttribute('data-tool'));
+      e.dataTransfer.effectAllowed = 'copy';
+    });
 
-  function pushIdx(target) {
-    const btn = target && target.closest ? target.closest('.elogo-push') : null;
-    return btn && root.contains(btn) ? +btn.getAttribute('data-idx') : -1;
-  }
-
-  function bindEvents() {
-    on('pointerdown', e => {
-      const idx = pushIdx(e.target);
-      if (idx < 0 || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    // Brett: Klick, Tastatur, Drag & Drop
+    on(els.board, 'click', e => {
+      const target = e.target.closest('[data-act]');
+      if (target) handleBoardAction(target);
+    });
+    on(els.board, 'keydown', e => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const target = e.target.closest('[data-act]');
+      if (!target) return;
       e.preventDefault();
-      const btn = e.target.closest('.elogo-push');
-      try { btn.setPointerCapture(e.pointerId); } catch (err) { /* optional */ }
-      btn.focus({ preventScroll: true });
-      setInput(idx, true);
+      handleBoardAction(target);
     });
-    const release = e => {
-      const idx = pushIdx(e.target);
-      if (idx >= 0) setInput(idx, false);
-    };
-    on('pointerup', release);
-    on('pointercancel', release);
-    on('lostpointercapture', release);
-    on('contextmenu', e => { if (pushIdx(e.target) >= 0) e.preventDefault(); });
-
-    on('keydown', e => {
-      if (e.repeat || (e.key !== ' ' && e.key !== 'Enter')) return;
-      const idx = pushIdx(e.target);
-      if (idx < 0) return;
-      e.preventDefault();
-      keyPressed.add(idx);
-      setInput(idx, true);
-    });
-    on('keyup', e => {
-      if (e.key !== ' ' && e.key !== 'Enter') return;
-      const idx = pushIdx(e.target);
-      if (idx < 0) return;
-      e.preventDefault();
-      keyPressed.delete(idx);
-      setInput(idx, false);
-    });
-    // Nur per Tastatur gehaltene Taster beim Fokusverlust lösen – Maus/Touch
-    // (Zweihand per Multitouch!) darf durch Fokuswechsel nicht abfallen.
-    on('focusout', e => {
-      const idx = pushIdx(e.target);
-      if (idx >= 0 && keyPressed.delete(idx)) setInput(idx, false);
-    });
-
-    on('click', e => {
-      const t = e.target;
-      if (!t || !t.closest) return;
-      const sw = t.closest('.elogo-switch');
-      if (sw) {
-        const idx = +sw.getAttribute('data-idx');
-        setInput(idx, !state.inputs[idx].active);
-        return;
+    on(els.board, 'dragover', e => {
+      if (e.target.closest('[data-act="slot"]')) {
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
       }
-      const preset = t.closest('[data-preset]');
-      if (preset) { setPreset(preset.getAttribute('data-preset')); return; }
-      const fn = t.closest('[data-fn]');
-      if (fn) { setFupFn(fn.getAttribute('data-fn')); return; }
-      const typeBtn = t.closest('[data-type-idx]');
-      if (typeBtn) { toggleType(+typeBtn.getAttribute('data-type-idx')); return; }
-      const action = t.closest('[data-action]');
-      if (action) {
-        const a = action.getAttribute('data-action');
-        if (a === 'reset') setPreset(state.preset);
-        if (a === 'sound') {
-          state.sound = !state.sound;
-          action.textContent = state.sound ? '🔊 Klick an' : '🔇 Klick aus';
-          action.setAttribute('aria-pressed', state.sound ? 'true' : 'false');
+    });
+    on(els.board, 'drop', e => {
+      const slot = e.target.closest('[data-act="slot"]');
+      const id = e.dataTransfer && e.dataTransfer.getData('text/plain');
+      if (!slot || !PARTS[id]) return;
+      e.preventDefault();
+      const rAttr = slot.getAttribute('data-r');
+      placeTool(+slot.getAttribute('data-c'), rAttr === 'o' ? 'o' : +rAttr, id);
+    });
+
+    // Bedien-Panel: Taster (gedrückt halten), Rastfunktionen
+    els.panel.querySelectorAll('[data-btn]').forEach(b => {
+      const key = b.getAttribute('data-btn');
+      const down = e => {
+        e.preventDefault();
+        if (b.setPointerCapture && e.pointerId !== undefined) {
+          try { b.setPointerCapture(e.pointerId); } catch (err) { /* ignorieren */ }
         }
-      }
+        setPressed(key, true);
+      };
+      const up = () => setPressed(key, false);
+      on(b, 'pointerdown', down);
+      on(b, 'pointerup', up);
+      on(b, 'pointercancel', up);
+      on(b, 'lostpointercapture', up);
+      on(b, 'contextmenu', e => e.preventDefault());
+      on(b, 'keydown', e => {
+        if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) {
+          e.preventDefault();
+          setPressed(key, true);
+        }
+      });
+      on(b, 'keyup', e => {
+        if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault();
+          setPressed(key, false);
+        }
+      });
+      on(b, 'blur', up);
     });
+    on(els.panel, 'click', e => {
+      const b = e.target.closest('[data-cmd]');
+      if (!b) return;
+      const cmd = b.getAttribute('data-cmd');
+      if (cmd === 'f2') rt.f2Tripped = !rt.f2Tripped;
+      else if (cmd === 's3') rt.latched.S3 = !rt.latched.S3;
+      else if (cmd === 'power') {
+        powerCycle();
+        flash = '⏼ Steuerspannung kurz aus und wieder ein – alle Schütze sind abgefallen.';
+      }
+      resettle();
+      renderDynamic();
+    });
+
+    resettle();
+    renderAllParts();
   }
 
-  // --------------------------------------------------------------------------
-  // Aufräumen
-  // --------------------------------------------------------------------------
   function destroy() {
-    stopTimer();
-    // Gedrückte Taster loslassen, damit beim nächsten render nichts "hängt"
-    state.inputs.forEach(inp => { if (inp.type === 'push') inp.active = false; });
-    if (root) listeners.forEach(([type, h]) => root.removeEventListener(type, h));
+    stopTick();
+    listeners.forEach(([el, type, h, opts]) => el.removeEventListener(type, h, opts));
     listeners = [];
-    keyPressed.clear();
-    if (audioCtx && audioCtx.close) {
-      try { audioCtx.close(); } catch (e) { /* ignorieren */ }
-    }
-    audioCtx = null;
+    // Gedrückte Taster loslassen, damit beim nächsten render nichts „hängt“
+    Object.keys(rt.pressed).forEach(k => { rt.pressed[k] = false; });
     els = null;
     root = null;
   }
 
   // --------------------------------------------------------------------------
-  // Styles (einmalig injiziert, Präfix "elogo-" vermeidet Konflikte)
+  // Styles (einmalig, nutzt die CSS-Variablen aus styles.css)
   // --------------------------------------------------------------------------
   function ensureStyles() {
-    if (document.getElementById('elogo-styles')) return;
+    if (document.getElementById('sb-styles')) return;
     const style = document.createElement('style');
-    style.id = 'elogo-styles';
+    style.id = 'sb-styles';
     style.textContent = `
-.elogo { --elogo-hi: #22c55e; --elogo-lo: #475569; --elogo-amber: #ffb000; --elogo-q2: #38bdf8;
-  background: var(--bg-card, #131b2e); border: 1px solid var(--border, #23314f); border-radius: var(--radius, 16px);
-  padding: 18px; color: var(--text-main, #f8fafc); }
-.elogo h3 { margin: 6px 0 0; font-size: 1.15rem; }
-.elogo-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
-.elogo-header-btns { display: flex; gap: 8px; }
-.elogo-badge { display: inline-block; font-size: .72rem; font-weight: 700; letter-spacing: .02em; color: #f59e0b;
-  background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.35); border-radius: 999px; padding: 3px 10px; }
-.elogo-mini { background: #1a2540; color: var(--text-main, #f8fafc); border: 1px solid var(--border, #23314f);
-  border-radius: 10px; padding: 6px 12px; font-size: .8rem; cursor: pointer; }
-.elogo-mini:hover { border-color: #38bdf8; }
-.elogo-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0; }
-.elogo-preset, .elogo-fn { background: #0f1626; color: var(--text-muted, #94a3b8); border: 1px solid var(--border, #23314f);
-  border-radius: 10px; padding: 8px 12px; font-size: .85rem; font-weight: 600; cursor: pointer; transition: all .15s; }
-.elogo-preset:hover, .elogo-fn:hover { color: #fff; border-color: #38bdf8; }
-.elogo-preset.is-active, .elogo-fn.is-active { background: rgba(56,189,248,.15); color: #fff; border-color: #38bdf8; }
-.elogo-fns { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-.elogo-fns:empty { display: none; }
-.elogo-fn { padding: 5px 10px; font-family: Consolas, 'Courier New', monospace; }
-.elogo-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 18px; }
-@media (max-width: 820px) { .elogo-grid { grid-template-columns: 1fr; } }
-.elogo-sub { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
-  color: var(--text-muted, #94a3b8); margin: 14px 0 8px; }
-
-/* Gehäuse */
-.elogo-device { background: linear-gradient(180deg, #3a3f47, #2a2e35); border: 1px solid #50565f; border-radius: 10px;
-  padding: 8px; box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 10px 24px rgba(0,0,0,.45); }
-.elogo-terms { display: flex; gap: 4px; background: #1c1f24; border-radius: 6px; padding: 5px; }
-.elogo-term { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
-  font: 600 .62rem Consolas, monospace; color: #9aa3ad; }
-.elogo-screw { width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #c9ced4, #6b7280);
-  position: relative; box-shadow: inset 0 -1px 2px rgba(0,0,0,.5); }
-.elogo-screw::after { content: ''; position: absolute; left: 3px; right: 3px; top: 6px; height: 2px; background: #374151; transform: rotate(-35deg); }
-.elogo-face { background: linear-gradient(180deg, #2f343b, #24282e); margin: 8px 0; border-radius: 6px; padding: 10px 12px;
-  border: 1px solid #454b54; }
-.elogo-brand { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
-.elogo-siemens { font: 800 .9rem Arial, sans-serif; letter-spacing: .08em; color: #2dd4bf; }
-.elogo-name { font: 800 1.15rem Arial, sans-serif; color: #e5e7eb; font-style: italic; }
-.elogo-name sup { color: #2dd4bf; font-size: .7em; margin-left: 2px; }
-.elogo-screen-row { display: flex; gap: 12px; align-items: center; }
-.elogo-lcd { flex: 1; min-width: 0; background: radial-gradient(ellipse at 30% 20%, #3a2600, #1d1300 70%); border: 3px solid #111;
-  border-radius: 4px; padding: 8px 10px; box-shadow: inset 0 0 18px rgba(0,0,0,.8), 0 0 14px rgba(255,176,0,.12);
-  font: 700 .86rem/1.55 Consolas, 'Courier New', monospace; color: var(--elogo-amber);
-  text-shadow: 0 0 6px rgba(255,176,0,.65); }
-.elogo-lcd-row { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1.55em; }
-.elogo-lcd-row[data-lcd="3"].is-alert { animation: elogo-blink 1s steps(2, start) infinite; }
-.elogo-lcd-d { display: inline-block; width: 1.1em; text-align: center; margin-left: 1px; border-radius: 2px; }
-.elogo-lcd-d.is-inv { background: var(--elogo-amber); color: #1d1300; text-shadow: none; box-shadow: 0 0 8px rgba(255,176,0,.6); }
-.elogo-keys { display: grid; grid-template-columns: repeat(3, 30px); gap: 4px; }
-.elogo-keys span { display: flex; align-items: center; justify-content: center; height: 22px; border-radius: 4px;
-  background: linear-gradient(180deg, #4b5159, #353a41); border: 1px solid #5d646d; font: 700 .58rem Arial, sans-serif; color: #cfd5db; }
-.elogo-plate { display: flex; align-items: center; gap: 6px; margin-top: 8px; font: 600 .62rem Arial, sans-serif; color: #9aa3ad; }
-.elogo-plate-type { margin-left: auto; opacity: .75; }
-.elogo-led { width: 8px; height: 8px; border-radius: 50%; background: #14532d; }
-.elogo-led.is-on { background: #4ade80; box-shadow: 0 0 8px #4ade80; }
-
-/* Ausgänge */
-.elogo-outs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.elogo-out { background: #0f1626; border: 1px solid var(--border, #23314f); border-radius: 12px; padding: 12px; text-align: center; }
-.elogo-out.is-free { opacity: .55; }
-.elogo-lamp { width: 54px; height: 54px; margin: 0 auto 6px; border-radius: 50%; background: #1f2937; border: 4px solid #4b5563;
-  display: flex; align-items: center; justify-content: center; transition: box-shadow .15s; }
-.elogo-lamp-glass { width: 100%; height: 100%; border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.25), rgba(30,41,59,.9) 60%); transition: background .15s; }
-.elogo-lamp-1.is-on { box-shadow: 0 0 22px 6px rgba(34,197,94,.55); border-color: #16a34a; }
-.elogo-lamp-1.is-on .elogo-lamp-glass { background: radial-gradient(circle at 35% 30%, #dcfce7, #22c55e 45%, #15803d); }
-.elogo-lamp-2.is-on { box-shadow: 0 0 22px 6px rgba(56,189,248,.55); border-color: #0284c7; }
-.elogo-lamp-2.is-on .elogo-lamp-glass { background: radial-gradient(circle at 35% 30%, #e0f2fe, #38bdf8 45%, #0369a1); }
-.elogo-clack { animation: elogo-clack .18s ease-out; }
-.elogo-out-id { font: 800 1rem Consolas, monospace; }
-.elogo-out-role { font-size: .8rem; color: var(--text-muted, #94a3b8); }
-.elogo-out-contact { font-size: .7rem; color: #64748b; margin-top: 4px; font-family: Consolas, monospace; }
-
-/* Eingänge */
-.elogo-ins { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-@media (max-width: 560px) { .elogo-ins { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.elogo-in { background: #0f1626; border: 1px solid var(--border, #23314f); border-radius: 12px; padding: 10px;
-  display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.elogo-in.is-free { opacity: .6; }
-.elogo-in-head { display: flex; justify-content: space-between; width: 100%; align-items: baseline; }
-.elogo-in-id { font: 800 1rem Consolas, monospace; }
-.elogo-in-kind { font-size: .7rem; color: var(--text-muted, #94a3b8); }
-.elogo-in-role { font-size: .8rem; font-weight: 600; text-align: center; }
-.elogo-in-state { font: 700 .72rem Consolas, monospace; color: #64748b; }
-.elogo-in-state.is-on { color: var(--elogo-hi); }
-.elogo-btn { border: none; background: none; padding: 0; cursor: pointer; -webkit-tap-highlight-color: transparent;
-  touch-action: none; user-select: none; -webkit-user-select: none; }
-.elogo-btn:focus-visible { outline: 2px solid #38bdf8; outline-offset: 4px; border-radius: 10px; }
-.elogo-push { width: 62px; height: 62px; border-radius: 50%; background: radial-gradient(circle, #374151, #111827);
-  border: 3px solid #6b7280; display: flex; align-items: center; justify-content: center; }
-.elogo-push-cap { width: 42px; height: 42px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #86efac, #16a34a 60%, #14532d);
-  box-shadow: 0 5px 0 #0b3d1f, 0 6px 10px rgba(0,0,0,.5); transform: translateY(-3px); transition: transform .06s, box-shadow .06s; }
-.elogo-push.is-on .elogo-push-cap { transform: translateY(1px); box-shadow: 0 1px 0 #0b3d1f, 0 0 16px rgba(34,197,94,.7); }
-.elogo-switch { width: 44px; height: 66px; border-radius: 8px; background: linear-gradient(180deg, #1f2937, #111827);
-  border: 2px solid #6b7280; position: relative; }
-.elogo-lever { position: absolute; left: 50%; top: 50%; width: 14px; height: 30px; margin: -26px 0 0 -7px; border-radius: 7px;
-  background: linear-gradient(90deg, #9ca3af, #e5e7eb, #9ca3af); box-shadow: 0 3px 6px rgba(0,0,0,.6);
-  transform-origin: 50% 100%; transform: rotate(180deg); transition: transform .12s; }
-.elogo-switch.is-on { border-color: var(--elogo-hi); box-shadow: 0 0 12px rgba(34,197,94,.45); }
-.elogo-switch.is-on .elogo-lever { transform: rotate(0deg); }
-.elogo-type { background: none; border: 1px dashed #334155; color: var(--text-muted, #94a3b8); border-radius: 8px;
-  font-size: .7rem; padding: 3px 8px; cursor: pointer; }
-.elogo-type:hover { color: #fff; border-color: #38bdf8; }
-
-/* FUP */
-.elogo-fup-card { background: #0b1220; border: 1px solid var(--border, #23314f); border-radius: 12px; padding: 12px;
-  background-image: radial-gradient(rgba(148,163,184,.08) 1px, transparent 1px); background-size: 14px 14px; }
-.elogo-fup-head { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; font-size: .85rem; font-weight: 700; margin-bottom: 8px; }
-.elogo-legend { display: flex; gap: 10px; font-size: .7rem; font-weight: 500; color: var(--text-muted, #94a3b8); }
-.elogo-legend i { display: inline-block; width: 14px; height: 3px; background: var(--elogo-lo); margin-right: 4px; vertical-align: middle; }
-.elogo-legend i.hi { background: var(--elogo-hi); }
-.elogo-legend i.neg { width: 8px; height: 8px; border-radius: 50%; background: none; border: 1.5px solid #cbd5e1; }
-.elogo-fup { width: 100%; height: auto; display: block; }
-.elogo-w { stroke: var(--elogo-lo); stroke-width: 3; stroke-linecap: round; transition: stroke .15s; }
-.elogo-w.is-hi { stroke: var(--elogo-hi); stroke-dasharray: 8 5; animation: elogo-flow .5s linear infinite;
-  filter: drop-shadow(0 0 3px rgba(34,197,94,.8)); }
-.elogo-neg { fill: #0b1220; stroke: #cbd5e1; stroke-width: 2; }
-.elogo-neg.is-hi { stroke: var(--elogo-hi); }
-.elogo-tag rect { fill: #1e293b; stroke: var(--elogo-lo); stroke-width: 1.5; }
-.elogo-tag text { fill: #cbd5e1; font: 700 12px Consolas, monospace; }
-.elogo-tag.is-hi rect { fill: rgba(34,197,94,.18); stroke: var(--elogo-hi); }
-.elogo-tag.is-hi text { fill: #bbf7d0; }
-.elogo-blk { fill: #111a2e; stroke: #94a3b8; stroke-width: 2; transition: stroke .15s, fill .15s; }
-.elogo-blk.is-hi { stroke: #38bdf8; fill: rgba(56,189,248,.1); filter: drop-shadow(0 0 5px rgba(56,189,248,.6)); }
-.elogo-sym { fill: #f8fafc; font: 800 26px Consolas, 'Courier New', monospace; }
-.elogo-bid { fill: #64748b; font: 600 10px Consolas, monospace; }
-.elogo-pin { fill: #94a3b8; font: 600 10px Consolas, monospace; }
-.elogo-par { fill: #cbd5e1; font: 600 11px Consolas, monospace; }
-.elogo-par.is-live { fill: var(--elogo-amber); }
-.elogo-glyph { fill: none; stroke: #94a3b8; stroke-width: 1.6; }
-.elogo-glyph.is-out { stroke: #38bdf8; }
-.elogo-bar-bg { fill: #1e293b; }
-.elogo-bar { fill: var(--elogo-amber); }
-
-/* Wahrheitstabelle & Info */
-.elogo-tt table { border-collapse: collapse; font: 600 .85rem Consolas, monospace; margin-top: 4px; }
-.elogo-tt th, .elogo-tt td { border: 1px solid #23314f; padding: 3px 14px; text-align: center; }
-.elogo-tt th { color: var(--text-muted, #94a3b8); }
-.elogo-tt td.is-hi { color: var(--elogo-hi); }
-.elogo-tt tr.is-cur td { background: rgba(56,189,248,.15); }
-.elogo-info { margin-top: 12px; font-size: .88rem; line-height: 1.5; color: #cbd5e1; }
-.elogo-info p { margin: 0 0 8px; }
-.elogo-hint { background: rgba(245,158,11,.08); border-left: 3px solid #f59e0b; padding: 8px 10px; border-radius: 6px; }
-
-@keyframes elogo-flow { to { stroke-dashoffset: -13; } }
-@keyframes elogo-blink { to { visibility: hidden; } }
-@keyframes elogo-clack { 0% { transform: scale(1); } 40% { transform: scale(.9); } 100% { transform: scale(1); } }
+.sb { position: relative; overflow: hidden; }
+.sb-header h3 { font-size: 1.05rem; font-weight: 800; margin-top: 6px; }
+.sb-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 10px 0 6px; }
+.sb-tab { flex-shrink: 0; background: var(--bg-card); color: var(--text-muted); border: 1px solid var(--border);
+  border-radius: 999px; padding: 7px 12px; font-size: 0.8rem; font-weight: 700; cursor: pointer; }
+.sb-tab.active { background: var(--accent-emerald); color: #04130d; border-color: var(--accent-emerald); }
+.sb-challenge { background: #0f172a; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
+.sb-ch-title { font-size: 0.95rem; font-weight: 800; color: var(--accent-amber); margin-bottom: 6px; }
+.sb-ch-goal { font-size: 0.85rem; line-height: 1.5; color: #cbd5e1; }
+.sb-steps { margin-top: 8px; font-size: 0.82rem; color: #cbd5e1; }
+.sb-steps summary { cursor: pointer; color: var(--accent-blue); font-weight: 700; }
+.sb-steps ol { padding-left: 20px; margin-top: 6px; display: grid; gap: 4px; line-height: 1.45; }
+.sb-ch-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.sb-results { margin-top: 10px; display: grid; gap: 6px; }
+.sb-res { font-size: 0.8rem; padding: 7px 10px; border-radius: 8px; display: grid; gap: 3px; }
+.sb-res.ok { background: rgba(16,185,129,0.1); color: #a7f3d0; }
+.sb-res.bad { background: rgba(239,68,68,0.12); color: #fecaca; border: 1px solid rgba(239,68,68,0.4); }
+.sb-res small { color: var(--text-muted); font-family: Consolas, monospace; }
+.sb-res-hint { color: #fde68a; line-height: 1.45; }
+.sb-res-msg { font-size: 0.85rem; font-weight: 800; padding: 8px 10px; border-radius: 8px; }
+.sb-res-msg.ok { background: rgba(34,197,94,0.18); color: #bbf7d0; border: 1px solid #22c55e; }
+.sb-res-msg.bad { background: rgba(245,158,11,0.12); color: #fde68a; }
+.sb-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.sb-build, .sb-side { min-width: 0; }
+@media (max-width: 860px) { .sb-grid { grid-template-columns: minmax(0, 1fr); } }
+.sb-pal-head { font-size: 0.85rem; font-weight: 800; margin-bottom: 6px; }
+.sb-pal-head small { display: block; font-weight: 500; color: var(--text-muted); font-size: 0.72rem; margin-top: 2px; }
+.sb-palette { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 8px; }
+.sb-pal { flex-shrink: 0; width: 96px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 6px 4px;
+  color: var(--text-main); cursor: grab; text-align: center; }
+.sb-pal:hover { background: var(--bg-card-hover); }
+.sb-pal.active { border-color: var(--accent-emerald); background: rgba(16,185,129,0.15); box-shadow: 0 0 0 2px rgba(16,185,129,0.35); }
+.sb-pal.is-out { border-style: dashed; }
+.sb-pal.is-erase { color: #fca5a5; }
+.sb-pal-icon { font-size: 1.15rem; line-height: 1.2; }
+.sb-pal-name { font-size: 0.68rem; font-weight: 800; line-height: 1.2; }
+.sb-pal small { font-size: 0.6rem; color: var(--text-muted); line-height: 1.15; }
+.sb-board { background: #070b13; border: 1px solid var(--border); border-radius: 12px; padding: 4px; }
+.sb-board-svg { display: block; width: 100%; height: auto; user-select: none; -webkit-user-select: none; }
+.sb-slot { fill: transparent; cursor: pointer; }
+.sb-slot:hover, .sb-slot:focus { fill: rgba(56,189,248,0.06); outline: none; stroke: rgba(56,189,248,0.35); stroke-width: 1; }
+.sb-chip { cursor: pointer; }
+.sb-chip:hover rect, .sb-chip:focus rect { fill: #1e293b; }
+.sb-chip:focus { outline: none; }
+.sb-bridge { cursor: pointer; }
+.sb-bridge:hover .sb-bridge-ghost { stroke: #38bdf8; }
+.sb-bridge:hover .sb-bridge-plus { fill: #38bdf8; }
+.sb-bridge:focus { outline: none; }
+.sb-live { stroke-dasharray: 9 5; animation: sb-flow 0.6s linear infinite; }
+.sb-glow { filter: drop-shadow(0 0 6px rgba(34,197,94,0.75)); }
+.sb-flash { min-height: 1.3em; font-size: 0.8rem; color: #cbd5e1; margin-top: 6px; line-height: 1.4; }
+.sb-panel { background: #0f172a; border: 1px solid var(--border); border-radius: 12px; padding: 10px; }
+.sb-panel-title { font-size: 0.82rem; font-weight: 800; margin-bottom: 8px; }
+.sb-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sb-test { min-height: 52px; border-radius: 12px; border: 2px solid #334155; background: #131b2e; color: var(--text-main);
+  font-size: 0.82rem; font-weight: 800; cursor: pointer; touch-action: none; -webkit-user-select: none; user-select: none;
+  transition: transform 0.06s, background 0.1s; }
+.sb-test:active, .sb-test.is-down { transform: scale(0.96); background: rgba(56,189,248,0.25); border-color: var(--accent-blue); }
+.sb-test-stop { border-color: #7f1d1d; }
+.sb-test-stop.is-down { background: rgba(239,68,68,0.3); border-color: #ef4444; }
+.sb-test-f2.is-tripped { background: rgba(249,115,22,0.3); border-color: #f97316; }
+.sb-test-s3.is-down { background: rgba(16,185,129,0.25); border-color: #10b981; }
+.sb-test-off { font-size: 0.75rem; color: var(--text-muted); }
+.sb-status { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.sb-stat { font-family: Consolas, monospace; font-size: 0.78rem; font-weight: 800; padding: 4px 8px; border-radius: 8px;
+  background: #131b2e; border: 1px solid #334155; color: var(--text-muted); }
+.sb-stat.on { background: rgba(34,197,94,0.18); border-color: #22c55e; color: #bbf7d0; }
+.sb-stat.stuck { border-color: #f97316; }
+.sb-motor-box { margin-top: 12px; text-align: center; }
+.sb-motors { display: flex; justify-content: center; gap: 14px; }
+.sb-motor { width: 130px; height: 130px; }
+.sb-motor-note { display: block; color: var(--text-muted); font-size: 0.72rem; line-height: 1.4; margin-top: 4px; }
+.sb-rotor { transform-box: view-box; }
+.sb-cw { animation: sb-spin 0.9s linear infinite; }
+.sb-ccw { animation: sb-spin 0.9s linear infinite reverse; }
+.sb-shake { animation: sb-shake 0.12s linear infinite; }
+.sb-sparks { animation: sb-blink 0.18s steps(2) infinite; }
+.sb-alert { margin-top: 12px; font-size: 0.82rem; line-height: 1.45; }
+.sb-info { margin-top: 14px; font-size: 0.82rem; color: #cbd5e1; }
+.sb-info summary { cursor: pointer; font-weight: 800; color: var(--accent-blue); }
+.sb-info ul { padding-left: 18px; margin-top: 8px; display: grid; gap: 6px; line-height: 1.5; }
+.sb-confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 5; }
+.sb-confetti i { position: absolute; top: -12px; width: 8px; height: 14px; border-radius: 2px; animation: sb-fall linear forwards; }
+@keyframes sb-flow { to { stroke-dashoffset: -14; } }
+@keyframes sb-spin { to { transform: rotate(360deg); } }
+@keyframes sb-shake { 0% { transform: translate(0,0); } 25% { transform: translate(2px,-1px); } 50% { transform: translate(-2px,1px); } 75% { transform: translate(1px,2px); } }
+@keyframes sb-blink { to { opacity: 0.15; } }
+@keyframes sb-fall { to { top: 105%; transform: rotate(540deg); opacity: 0.6; } }
 @media (prefers-reduced-motion: reduce) {
-  .elogo-w.is-hi, .elogo-lcd-row.is-alert, .elogo-clack { animation: none; }
+  .sb-live, .sb-cw, .sb-ccw, .sb-shake, .sb-sparks { animation: none; }
 }
 `;
     document.head.appendChild(style);
@@ -975,7 +1449,12 @@ window.ElektroLogo = (function () {
     render,
     destroy,
     // Für Tests / externe Steuerung
-    setPreset,
-    getState: () => JSON.parse(JSON.stringify(state))
+    setChallenge: selectChallenge,
+    checkChallenge: id => {
+      const ch = CHALLENGES.find(c => c.id === id) || currentChallenge();
+      return checkChallenge(ch, store.boards[ch.id] || ch.start());
+    },
+    getState: () => JSON.parse(JSON.stringify({ store, runtime: rt })),
+    _internal: { CHALLENGES, checkChallenge, settle, freshRuntime, emptyBoard }
   };
 })();

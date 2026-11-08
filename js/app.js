@@ -4,6 +4,13 @@
 
 window.ElektroApp = (function () {
   const STORAGE_KEY = 'elektrocoach_state_v2';
+  const LEGACY_KEY = 'elektrocoach_state_v1';
+  const BACKUP_KEY = 'elektrocoach_backup_latest';
+  const IDB_NAME = 'ElektroCoachDB';
+  const IDB_STORE = 'userState';
+  const IDB_KEY = 'main';
+  const RECENT_MAX = 25;
+  const BACKUP_PREFIX = 'EC5-';
   const data = window.ELEKTRO_DATA || { categories: [], questions: [], cheatSheets: [] };
 
   // Azubi-Level- & Rang-System
@@ -29,6 +36,7 @@ window.ElektroApp = (function () {
     currentShuffledOptions: null, // [{ text, origIdx }]
     streakDays: 1,
     lastStudyDate: '',
+    recentlyAnsweredIds: [], // die letzten 25 beantworteten Fragen-IDs (neueste zuletzt)
     roundStats: {
       total: 0,
       correct: 0,
@@ -79,44 +87,360 @@ window.ElektroApp = (function () {
     state.lastStudyDate = today;
   }
 
-  function loadState() {
+  // --------------------------------------------------------------------------
+  // Triple-Layer-Persistenz: localStorage (Haupt + Sicherheitskopie) + IndexedDB
+  // --------------------------------------------------------------------------
+  const persistInfo = {
+    idbOk: null, // null = unbekannt, true = gespiegelt, false = nicht verfügbar
+    persisted: null, // Ergebnis von navigator.storage.persist()
+    lastSavedAt: null,
+    restoredFrom: '' // 'idb' | 'backup' | 'v1' | 'import'
+  };
+
+  function snapshot() {
+    return {
+      version: 5,
+      savedAt: new Date().toISOString(),
+      xp: state.xp,
+      boxes: state.boxes,
+      fachFilter: state.fachFilter,
+      streakDays: state.streakDays,
+      lastStudyDate: state.lastStudyDate,
+      recentlyAnsweredIds: state.recentlyAnsweredIds
+    };
+  }
+
+  function isValidSnapshot(obj) {
+    return !!obj && typeof obj === 'object' && typeof obj.boxes === 'object' && obj.boxes !== null;
+  }
+
+  function applySnapshot(parsed) {
+    state.xp = Math.max(0, parseInt(parsed.xp, 10) || 0);
+    state.boxes = {};
+    Object.keys(parsed.boxes || {}).forEach(id => {
+      const b = parseInt(parsed.boxes[id], 10);
+      if (b >= 1 && b <= 4) state.boxes[id] = b;
+    });
+    state.streakDays = parsed.streakDays || 1;
+    state.lastStudyDate = parsed.lastStudyDate || '';
+    state.recentlyAnsweredIds = Array.isArray(parsed.recentlyAnsweredIds)
+      ? parsed.recentlyAnsweredIds.filter(id => typeof id === 'string').slice(-RECENT_MAX)
+      : [];
+    if (FAECHER.some(f => f.id === parsed.fachFilter)) state.fachFilter = parsed.fachFilter;
+  }
+
+  function readLocal(key) {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('elektrocoach_state_v1');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        state.xp = parsed.xp || 0;
-        state.boxes = parsed.boxes || {};
-        state.streakDays = parsed.streakDays || 1;
-        state.lastStudyDate = parsed.lastStudyDate || '';
-        if (FAECHER.some(f => f.id === parsed.fachFilter)) state.fachFilter = parsed.fachFilter;
-      }
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return isValidSnapshot(parsed) ? parsed : null;
     } catch (e) {
-      console.warn('LocalStorage konnte nicht geladen werden:', e);
+      return null;
     }
+  }
 
-    updateStreak();
-
-    // Initialisiere alle Fragen: isWeakSpot startet in Box 1 ("Wackelt"), Rest in Box 2 ("Im Training")
+  // Neue Fragen (nach Updates) einsortieren – isWeakSpot zählt NUR beim allerersten Initialisieren
+  function initUnknownQuestions() {
     data.questions.forEach(q => {
-      if (!state.boxes[q.id]) {
-        state.boxes[q.id] = q.isWeakSpot ? 1 : 2;
-      }
+      if (!state.boxes[q.id]) state.boxes[q.id] = q.isWeakSpot ? 1 : 2;
     });
   }
 
+  function openIdb() {
+    return new Promise((resolve, reject) => {
+      if (!window.indexedDB) return reject(new Error('IndexedDB nicht verfügbar'));
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains(IDB_STORE)) req.result.createObjectStore(IDB_STORE);
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function idbWrite(value) {
+    return openIdb().then(db => new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(value, IDB_KEY);
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    }));
+  }
+
+  function idbRead() {
+    return openIdb().then(db => new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get(IDB_KEY);
+      req.onsuccess = () => { db.close(); resolve(req.result || null); };
+      req.onerror = () => { db.close(); reject(req.error); };
+    }));
+  }
+
+  function loadState() {
+    // Reihenfolge: v2 → Sicherheitskopie → v1-Migration. IndexedDB folgt asynchron in restoreFromIdbIfEmpty().
+    let parsed = readLocal(STORAGE_KEY);
+    if (!parsed) {
+      parsed = readLocal(BACKUP_KEY);
+      if (parsed) persistInfo.restoredFrom = 'backup';
+    }
+    if (!parsed) {
+      parsed = readLocal(LEGACY_KEY);
+      if (parsed) persistInfo.restoredFrom = 'v1';
+    }
+    if (parsed) applySnapshot(parsed);
+
+    updateStreak();
+    initUnknownQuestions();
+    return !!parsed;
+  }
+
+  // Falls localStorage leer war (z. B. nach iOS-Cache-Reset): Stand aus IndexedDB zurückholen
+  function restoreFromIdbIfEmpty(hadLocal) {
+    if (hadLocal) {
+      saveState(); // spiegelt evtl. migrierten Stand sofort in alle Schichten
+      return;
+    }
+    idbRead()
+      .then(saved => {
+        persistInfo.idbOk = true;
+        if (isValidSnapshot(saved) && Object.keys(saved.boxes).length > 0) {
+          applySnapshot(saved);
+          updateStreak();
+          initUnknownQuestions();
+          persistInfo.restoredFrom = 'idb';
+          saveState();
+          buildQuizQueue(state.quizFilter);
+          renderDashboard();
+          showToast('♻️ Lernstand aus dem IndexedDB-Tresor wiederhergestellt!');
+        } else {
+          saveState();
+        }
+      })
+      .catch(() => {
+        persistInfo.idbOk = false;
+        saveState();
+      });
+  }
+
   function saveState() {
+    const snap = snapshot();
+    const json = JSON.stringify(snap);
     try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          xp: state.xp,
-          boxes: state.boxes,
-          fachFilter: state.fachFilter,
-          streakDays: state.streakDays,
-          lastStudyDate: state.lastStudyDate
+      localStorage.setItem(STORAGE_KEY, json);
+      localStorage.setItem(BACKUP_KEY, json);
+      persistInfo.lastSavedAt = snap.savedAt;
+    } catch (e) {
+      console.warn('LocalStorage konnte nicht gespeichert werden:', e);
+    }
+    idbWrite(snap)
+      .then(() => {
+        if (persistInfo.idbOk !== true) {
+          persistInfo.idbOk = true;
+          renderVault();
+        }
+      })
+      .catch(() => {
+        if (persistInfo.idbOk !== false) {
+          persistInfo.idbOk = false;
+          renderVault();
+        }
+      });
+  }
+
+  function requestPersistentStorage() {
+    if (navigator.storage && navigator.storage.persist) {
+      navigator.storage.persist()
+        .then(granted => {
+          persistInfo.persisted = !!granted;
+          renderVault();
         })
-      );
-    } catch (e) {}
+        .catch(() => {});
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // 💾 Lernstand-Tresor: Backup-Code kopieren / einfügen / JSON-Datei
+  // --------------------------------------------------------------------------
+  function encodeBackup() {
+    const json = JSON.stringify(snapshot());
+    return BACKUP_PREFIX + btoa(unescape(encodeURIComponent(json)));
+  }
+
+  function decodeBackup(text) {
+    const raw = String(text || '').trim();
+    if (!raw) throw new Error('Kein Backup-Code eingegeben.');
+    let json = raw;
+    if (raw[0] !== '{') {
+      const code = raw.startsWith(BACKUP_PREFIX) ? raw.slice(BACKUP_PREFIX.length) : raw;
+      json = decodeURIComponent(escape(atob(code.replace(/\s+/g, ''))));
+    }
+    const parsed = JSON.parse(json);
+    if (!isValidSnapshot(parsed)) throw new Error('Der Code enthält keinen gültigen Lernstand.');
+    return parsed;
+  }
+
+  function showToast(msg) {
+    let el = document.getElementById('ec-toast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'ec-toast';
+      el.style.cssText = 'position:fixed;left:50%;bottom:86px;transform:translateX(-50%);z-index:999;' +
+        'background:#0f172a;color:#f8fafc;border:1px solid #10b981;border-radius:12px;padding:10px 16px;' +
+        'font-size:0.85rem;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,0.5);max-width:90vw;text-align:center;' +
+        'transition:opacity 0.3s;';
+      document.body.appendChild(el);
+    }
+    el.textContent = msg;
+    el.style.opacity = '1';
+    clearTimeout(showToast.timer);
+    showToast.timer = setTimeout(() => { el.style.opacity = '0'; }, 3200);
+  }
+
+  function copyBackupCode() {
+    const code = encodeBackup();
+    const fallback = () => {
+      const ta = document.getElementById('vault-code-input');
+      if (ta) {
+        ta.value = code;
+        ta.closest('.vault-restore').style.display = 'block';
+        ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+      }
+      showToast('📋 Code steht im Feld – markieren & kopieren!');
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code)
+        .then(() => showToast('📋 Backup-Code kopiert! Auf dem anderen Gerät einfügen.'))
+        .catch(fallback);
+    } else {
+      fallback();
+    }
+  }
+
+  function toggleRestoreBox() {
+    const box = document.querySelector('#backup-vault .vault-restore');
+    if (!box) return;
+    box.style.display = box.style.display === 'block' ? 'none' : 'block';
+    if (box.style.display === 'block') {
+      const ta = document.getElementById('vault-code-input');
+      if (ta) ta.focus();
+    }
+  }
+
+  function restoreFromText(text) {
+    let parsed;
+    try {
+      parsed = decodeBackup(text);
+    } catch (e) {
+      showToast('❌ Ungültiger Backup-Code: ' + (e.message || 'Format unbekannt'));
+      return;
+    }
+    const learned = Object.values(parsed.boxes).filter(b => b >= 3).length;
+    const ok = window.confirm(
+      `Lernstand wiederherstellen?\n\n${parsed.xp || 0} XP · ${learned} Fragen in Box 3/4` +
+      (parsed.savedAt ? `\nGesichert am: ${new Date(parsed.savedAt).toLocaleString('de-DE')}` : '') +
+      `\n\nDein aktueller Stand (${state.xp} XP) wird dabei überschrieben.`
+    );
+    if (!ok) return;
+    applySnapshot(parsed);
+    initUnknownQuestions();
+    persistInfo.restoredFrom = 'import';
+    saveState();
+    buildQuizQueue(state.quizFilter);
+    renderDashboard();
+    showToast('✅ Lernstand wiederhergestellt!');
+  }
+
+  function restoreBackupFromInput() {
+    const ta = document.getElementById('vault-code-input');
+    if (ta) restoreFromText(ta.value);
+  }
+
+  function restoreBackupFromFile(input) {
+    const file = input && input.files && input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => restoreFromText(reader.result);
+    reader.readAsText(file);
+    input.value = '';
+  }
+
+  function downloadBackupFile() {
+    const blob = new Blob([JSON.stringify(snapshot(), null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `elektrocoach-lernstand-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast('📄 JSON-Backup gespeichert!');
+  }
+
+  function renderVault() {
+    const el = document.getElementById('backup-vault');
+    if (!el) return;
+    const learned = data.questions.filter(q => (state.boxes[q.id] || 2) >= 3).length;
+    const idbStatus = persistInfo.idbOk === true
+      ? '<span style="color:#34d399;">✅ Lokal + IndexedDB gesichert</span>'
+      : persistInfo.idbOk === false
+        ? '<span style="color:#fbbf24;">⚠️ Nur lokal gesichert (IndexedDB blockiert) – Backup-Code nutzen!</span>'
+        : '<span style="color:var(--text-muted);">⏳ Prüfe IndexedDB …</span>';
+    const persistStatus = persistInfo.persisted === true
+      ? ' · 🔒 Dauerspeicher aktiv'
+      : persistInfo.persisted === false ? ' · ℹ️ Browser darf Speicher bei Platzmangel räumen' : '';
+    const savedAt = persistInfo.lastSavedAt
+      ? new Date(persistInfo.lastSavedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+      : '–';
+    const restoredNote = {
+      idb: '♻️ Stand wurde automatisch aus IndexedDB wiederhergestellt.',
+      backup: '♻️ Stand wurde aus der Sicherheitskopie wiederhergestellt.',
+      v1: '♻️ Alter v1-Stand wurde übernommen.',
+      import: '♻️ Stand wurde per Backup-Code/Datei eingespielt.'
+    }[persistInfo.restoredFrom] || '';
+
+    // Eingabefeld beim Neuzeichnen nicht leeren
+    const prevInput = document.getElementById('vault-code-input');
+    const prevValue = prevInput ? prevInput.value : '';
+    const prevOpen = !!(prevInput && prevInput.closest('.vault-restore').style.display === 'block');
+
+    el.innerHTML = `
+      <div class="section-header">
+        <h2>💾 Dein Lernstand-Tresor (Automatisch gesichert)</h2>
+        <span class="badge badge-emerald">Auto-Save</span>
+      </div>
+      <div class="kpi-grid" style="margin-bottom:10px;">
+        <div class="kpi-box"><strong style="color:#34d399;">${learned}</strong><small>Fragen in Box 3/4</small></div>
+        <div class="kpi-box"><strong style="color:var(--accent-amber);">${state.xp}</strong><small>Gesamt-XP</small></div>
+        <div class="kpi-box"><strong>${Object.keys(state.boxes).length}</strong><small>Karten im Speicher</small></div>
+        <div class="kpi-box"><strong>${savedAt}</strong><small>Zuletzt gesichert</small></div>
+      </div>
+      <p style="font-size:0.8rem;font-weight:700;margin-bottom:4px;">${idbStatus}${persistStatus}</p>
+      ${restoredNote ? `<p style="font-size:0.76rem;color:var(--text-muted);margin-bottom:4px;">${restoredNote}</p>` : ''}
+      <p style="font-size:0.76rem;color:var(--text-muted);margin-bottom:10px;">
+        Tipp: Mit dem Backup-Code überträgst du deinen Stand per Copy-Paste zwischen PC und iPhone.
+      </p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        <button class="btn-secondary btn-sm" onclick="ElektroApp.copyBackupCode()">📋 Backup-Code kopieren</button>
+        <button class="btn-secondary btn-sm" onclick="ElektroApp.toggleRestoreBox()">📥 Backup-Code einfügen / wiederherstellen</button>
+        <button class="btn-secondary btn-sm" onclick="ElektroApp.downloadBackupFile()">📄 Als JSON-Datei speichern</button>
+      </div>
+      <div class="vault-restore" style="display:${prevOpen ? 'block' : 'none'};margin-top:10px;">
+        <textarea id="vault-code-input" rows="3" placeholder="Backup-Code (EC5-…) oder JSON hier einfügen"
+          style="width:100%;background:#090d16;color:var(--text-main);border:1px solid var(--border);border-radius:10px;padding:8px;font-family:monospace;font-size:0.75rem;resize:vertical;"></textarea>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;align-items:center;">
+          <button class="btn-primary btn-sm" onclick="ElektroApp.restoreBackupFromInput()">✅ Jetzt wiederherstellen</button>
+          <label class="btn-secondary btn-sm" style="cursor:pointer;">
+            📂 JSON-Datei laden
+            <input type="file" accept="application/json,.json,.txt" style="display:none;" onchange="ElektroApp.restoreBackupFromFile(this)" />
+          </label>
+        </div>
+      </div>
+    `;
+    const ta = document.getElementById('vault-code-input');
+    if (ta && prevValue) ta.value = prevValue;
   }
 
   function addXp(amount) {
@@ -233,6 +557,8 @@ window.ElektroApp = (function () {
         })
         .join('');
     }
+
+    renderVault();
   }
 
   // --------------------------------------------------------------------------
@@ -243,13 +569,47 @@ window.ElektroApp = (function () {
     return data.questions.filter(q => q.fach === state.fachFilter);
   }
 
+  function shuffleArray(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  // Schwächere Box zuerst; innerhalb einer Box zufällig gemischt, kürzlich beantwortete nach hinten
+  function orderByBox(pool) {
+    const recentRank = {};
+    state.recentlyAnsweredIds.forEach((id, i) => { recentRank[id] = i + 1; }); // höher = später beantwortet
+    const keyed = shuffleArray(pool).map((q, i) => ({ q, i }));
+    keyed.sort((a, b) => {
+      const boxDiff = (state.boxes[a.q.id] || 2) - (state.boxes[b.q.id] || 2);
+      if (boxDiff !== 0) return boxDiff;
+      const recentDiff = (recentRank[a.q.id] || 0) - (recentRank[b.q.id] || 0);
+      if (recentDiff !== 0) return recentDiff;
+      return a.i - b.i; // Zufallsreihenfolge innerhalb der Box beibehalten
+    });
+    return keyed.map(k => k.q);
+  }
+
+  function rememberAnswered(id) {
+    state.recentlyAnsweredIds = state.recentlyAnsweredIds.filter(x => x !== id);
+    state.recentlyAnsweredIds.push(id);
+    if (state.recentlyAnsweredIds.length > RECENT_MAX) {
+      state.recentlyAnsweredIds = state.recentlyAnsweredIds.slice(-RECENT_MAX);
+    }
+  }
+
   function buildQuizQueue(filter, excludeIds = []) {
     state.quizFilter = filter;
     const base = questionsInFach();
     let pool = [];
 
     if (filter === 'weak') {
-      pool = base.filter(q => (state.boxes[q.id] || 2) === 1 || q.isWeakSpot);
+      // Nur der echte Leitner-Stand zählt – isWeakSpot wirkt ausschließlich bei der Erst-Initialisierung
+      pool = base.filter(q => (state.boxes[q.id] || 2) === 1);
+      if (pool.length === 0) pool = base.filter(q => (state.boxes[q.id] || 2) === 2);
       if (pool.length === 0) pool = [...base];
     } else if (filter === 'retro') {
       pool = base.filter(q => q.isRetro || (q.lehrjahr && q.lehrjahr <= 2));
@@ -258,8 +618,7 @@ window.ElektroApp = (function () {
       // Priorisiere Box 1 und 2, schließe bereits in dieser Session gelernte aus falls genug übrig
       let available = base.filter(q => !excludeIds.includes(q.id));
       if (available.length < 5) available = [...base]; // Reset falls Pool erschöpft
-      available.sort((a, b) => (state.boxes[a.id] || 2) - (state.boxes[b.id] || 2));
-      pool = available.slice(0, 10);
+      pool = available;
     } else if (filter === 'all') {
       pool = [...base];
     } else {
@@ -268,8 +627,9 @@ window.ElektroApp = (function () {
       if (available.length >= 5) pool = available;
     }
 
-    // Sortiere so, dass schwächere Fragen zuerst drankommen
-    pool.sort((a, b) => (state.boxes[a.id] || 2) - (state.boxes[b.id] || 2));
+    // Schwächere Fragen zuerst, innerhalb der Box frisch gemischt
+    pool = orderByBox(pool);
+    if (filter === 'quick10') pool = pool.slice(0, 10);
 
     // Proaktiver Retro-Drill: Streue bei normalen Runden (nicht im reinen Retro-Modus) alle 4 Fragen eine Frage aus LJ 1/2 ein!
     if (filter !== 'retro' && pool.length >= 4) {
@@ -421,6 +781,7 @@ window.ElektroApp = (function () {
           </div>
           <p><strong>Baustellen-Erklärung:</strong> ${q.explanation}</p>
           ${q.formula ? `<div class="quiz-formula-box">📐 ${q.formula}</div>` : ''}
+          ${q.tip ? `<p style="margin-top:8px;font-size:0.82rem;background:rgba(16,185,129,0.1);border-left:3px solid var(--accent-emerald);padding:7px 10px;border-radius:6px;"><strong>👷 Prüfer-Tipp:</strong> ${q.tip}</p>` : ''}
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;flex-wrap:wrap;gap:8px;">
             <small style="color:var(--text-muted);">Quelle: ${q.source || 'Fachkunde Elektrotechnik'}</small>
             <button class="btn-primary btn-sm" onclick="ElektroApp.nextQuestion()">
@@ -448,6 +809,7 @@ window.ElektroApp = (function () {
           </div>
         </div>
 
+        ${q.title ? `<div style="font-size:0.76rem;font-weight:800;color:var(--accent-blue);margin-top:10px;text-transform:uppercase;letter-spacing:0.04em;">${q.title}</div>` : ''}
         <div class="quiz-question-title">${q.question}</div>
         <div class="quiz-options">${optionsHtml}</div>
         ${explanationHtml}
@@ -465,6 +827,7 @@ window.ElektroApp = (function () {
 
     state.roundStats.total++;
     state.roundStats.completedIds.push(q.id);
+    rememberAnswered(q.id);
 
     const currentBox = state.boxes[q.id] || 2;
     if (origIdx === q.correctIndex) {
@@ -697,7 +1060,7 @@ window.ElektroApp = (function () {
       if (content) content.style.display = (id === subId) ? 'block' : 'none';
     });
     if (subId === 'tools' && window.ElektroTools) {
-      window.ElektroTools.renderToolsGuide('tools-guide-container');
+      window.ElektroTools.renderToolsGuide(document.getElementById('tools-guide-container'));
     }
     if (subId === 'lehrplan' && window.ElektroStudyPlaner) {
       window.ElektroStudyPlaner.renderLehrplanExplorer('lehrplan-container');
@@ -735,8 +1098,10 @@ window.ElektroApp = (function () {
   }
 
   function init() {
-    loadState();
+    const hadLocal = loadState();
+    requestPersistentStorage();
     renderDashboard();
+    restoreFromIdbIfEmpty(hadLocal);
     buildQuizQueue('weak');
     if (window.ElektroSimulators) {
       window.ElektroSimulators.renderAll('simulators-container');
@@ -751,7 +1116,7 @@ window.ElektroApp = (function () {
     switchCheatsSubtab('cheats');
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
     }
   }
 
@@ -767,6 +1132,11 @@ window.ElektroApp = (function () {
     startNextRound,
     repeatWrongQuestions,
     runQuickCalcs,
-    addXp
+    addXp,
+    copyBackupCode,
+    toggleRestoreBox,
+    restoreBackupFromInput,
+    restoreBackupFromFile,
+    downloadBackupFile
   };
 })();

@@ -1,4 +1,7 @@
-const CACHE_NAME = 'elektrocoach-pro-v4';
+// ElektroCoach PRO – Service Worker v5
+// Network-First mit Cache-Fallback: Code-Updates sind sofort aktiv, offline läuft alles aus dem Cache.
+// Der Lernstand liegt in localStorage/IndexedDB und wird vom Cache-Wechsel NICHT berührt.
+const CACHE_NAME = 'elektrocoach-pro-v5';
 const ASSETS = [
   '/',
   '/index.html',
@@ -30,19 +33,25 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET') return;
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  if (new URL(req.url).origin !== self.location.origin) return;
+
   event.respondWith(
-    caches.match(event.request).then(cached => {
-      const fetchPromise = fetch(event.request)
-        .then(res => {
-          if (res && res.status === 200) {
-            const copy = res.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
-          }
-          return res;
+    fetch(req)
+      .then(res => {
+        if (res && res.status === 200 && res.type === 'basic') {
+          const copy = res.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(req, copy));
+        }
+        return res;
+      })
+      .catch(() =>
+        caches.match(req).then(cached => {
+          if (cached) return cached;
+          if (req.mode === 'navigate') return caches.match('/index.html');
+          return Response.error();
         })
-        .catch(() => cached);
-      return cached || fetchPromise;
-    })
+      )
   );
 });

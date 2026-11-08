@@ -4,7 +4,7 @@
  * Elektroniker für Energie- und Gebäudetechnik (Abschluss Juli 2027)
  *
  * Aufbau:
- *   categories  – 9 Prüfungs-Themenblöcke
+ *   categories  – 10 Prüfungs-Themenblöcke (V5: + Messpraxis)
  *   questions   – Multiple-Choice-Fragen (4 Optionen, correctIndex 0–3)
  *   cheatSheets – 1 Spickzettel pro Kategorie (WiSo ohne eigenen Spickzettel)
  *
@@ -99,6 +99,14 @@ window.ELEKTRO_DATA = {
       icon: "⚖️",
       color: "#a855f7",
       description: "Vorzeitige Zulassung zur Gesellenprüfung, Mängelansprüche BGB/VOB/B, die 5 Säulen der Sozialversicherung."
+    },
+    {
+      id: "messpraxis",
+      title: "Messpraxis: VDE-Prüfung, Multimeter & Oszilloskop",
+      shortTitle: "Messpraxis",
+      icon: "📟",
+      color: "#06b6d4",
+      description: "R_LO, R_ISO, Z_S/Z_I & RCD nach DIN VDE 0100-600, Prüfreihenfolge, Multimeter-Buchsen, True RMS, Oszilloskop (Volt/Div, Time/Div, Trigger) & Prüfprotokolle auswerten."
     }
   ],
 
@@ -1704,6 +1712,489 @@ window.ELEKTRO_DATA = {
       formula: "I_b ≤ I_n ≤ I_z  |  I_2 ≤ 1,45 · I_z",
       source: "GP Teil 1 / Fachkunde Kap. 4 (Leitungsschutz, DIN VDE 0100-430)",
       isWeakSpot: false
+    },
+
+    // ───────────── 10. MESSPRAXIS: VDE-PRÜFUNG, MULTIMETER, OSZILLOSKOP & PROTOKOLL (V5) ─────────────
+    {
+      id: "mp-01",
+      category: "messpraxis",
+      fach: "IE",
+      lehrjahr: 3,
+      isRetro: false,
+      isWeakSpot: false,
+      title: "R_LO – Prüfgerät einstellen",
+      question: "Du bereitest am Installationstester die Schutzleiter-Durchgangsmessung (R_LO) nach DIN VDE 0100-600 vor. Welche Einstellung ist richtig?",
+      options: [
+        "Wahlschalter auf R_ISO, Prüfspannung 500 V DC, Messstrom ≥ 1 mA, Messung ohne Polaritätsumkehr",
+        "Wahlschalter auf Z_S, Prüfstrom ca. 10 A AC, Netzspannung 230 V, Messung zwischen L und PE",
+        "Wahlschalter auf R_LO, Prüfstrom ≥ 200 mA DC, Leerlaufspannung 4–24 V, Messung mit Polaritätsumkehr ±",
+        "Wahlschalter auf Ω am Multimeter, Messstrom ca. 1 mA, Messung im Modus Durchgangspiepser"
+      ],
+      correctIndex: 2,
+      explanation: "Die Niederohmmessung ist in DIN VDE 0100-600 bzw. DIN EN 61557-4 genau festgelegt: Prüfstrom mindestens 200 mA, Leerlaufspannung 4–24 V (DC oder AC). Gemessen wird in BEIDEN Polaritäten (± bzw. automatische Umpolung), weil oxidierte Klemmstellen oder Thermospannungen in einer Richtung schlechter leiten können – ins Protokoll kommt der höhere Wert. Ein Multimeter-Ohmbereich mit ca. 1 mA reicht nicht: Eine angegammelte PE-Klemme zeigt bei Mini-Strom oft gute Werte, versagt aber, wenn im Fehlerfall hunderte Ampere fließen müssen.",
+      formula: "R_LO: I_Prüf ≥ 200 mA · U_0 = 4–24 V · Messung + und − → höherer Wert zählt",
+      tip: "Prüfer fragen gern nach „200 mA“ und „Umpolung“. Merke: Schutzleiter wird mit KRAFT gemessen – 200 mA, nicht 1 mA.",
+      source: "DIN VDE 0100-600 / DIN EN 61557-4 · Fachkunde Kap. 5 (Prüfen von Anlagen)"
+    },
+    {
+      id: "mp-02",
+      category: "messpraxis",
+      fach: "IE",
+      lehrjahr: 3,
+      isRetro: false,
+      isWeakSpot: false,
+      title: "R_LO – Nullabgleich der Messleitungen",
+      question: "Bevor du R_LO misst, hältst du die beiden Messspitzen aneinander – der Tester zeigt 0,21 Ω. Was musst du tun?",
+      options: [
+        "Messleitungen kompensieren (Nullabgleich R_komp), sonst werden 0,21 Ω jedem Messwert zugeschlagen",
+        "Nichts tun, weil der Tester den Widerstand der Messleitungen bei jeder Messung selbst ignoriert",
+        "Messleitungen tauschen, weil 0,21 Ω eine durchgebrannte Feinsicherung im Prüfgerät anzeigen",
+        "Später jeden Messwert verdoppeln, weil Hin- und Rückleitung der Messleitung doppelt eingehen"
+      ],
+      correctIndex: 0,
+      explanation: "Messleitungen, Prüfspitzen und Krokodilklemmen haben selbst einen Widerstand von typisch 0,1–0,3 Ω. Bei Grenzwerten um 0,3 Ω würde das jeden Messwert massiv verfälschen. Darum vor der ersten R_LO-Messung die Spitzen kurzschließen und die Kompensation (R_komp / „Null“ / „ZERO“) auslösen – der Tester speichert den Wert und zieht ihn ab. Wechselst du die Messleitung oder eine Verlängerungsleitung, musst du neu kompensieren.",
+      formula: "R_Anzeige = R_gemessen − R_komp",
+      tip: "Typische Praxisfalle: Mit der 10-m-Verlängerungsleitung zur PE-Schiene messen, aber nur die kurzen Messleitungen kompensiert – dann ist jede Steckdose plötzlich „schlecht“.",
+      source: "DIN EN 61557-4 · Bedienungsanleitung Installationstester"
+    },
+    {
+      id: "mp-03",
+      category: "messpraxis",
+      fach: "IE",
+      lehrjahr: 3,
+      isRetro: false,
+      isWeakSpot: false,
+      title: "R_LO – Messort & Zustand",
+      question: "In welchem Zustand und zwischen welchen Punkten wird R_LO bei der Erstprüfung gemessen?",
+      options: [
+        "Unter Spannung, zwischen Außenleiter L und Schutzleiter PE an jeder Steckdose; Grenzwert höchstens 2,87 Ω",
+        "Spannungsfrei, zwischen Außenleiter L und Neutralleiter N im Verteiler; Mindestwert mindestens 1,0 MΩ",
+        "Unter Spannung, zwischen Neutralleiter N und PE an der letzten Steckdose; Grenzwert höchstens 50 V",
+        "Spannungsfrei, zwischen PE-Schiene im Verteiler und jedem Schutzkontakt bzw. Körper; Richtwert ≤ 0,3 Ω bzw. ≤ 1 Ω"
+      ],
+      correctIndex: 3,
+      explanation: "R_LO ist eine reine Widerstandsmessung mit der Eigenspannung des Testers – die Anlage muss dafür spannungsfrei sein (5 Sicherheitsregeln!). Geprüft wird die Durchgängigkeit des Schutzleiters und des Schutzpotentialausgleichs: von der PE-Schiene im Verteiler zu jedem Schutzkontakt, jedem Leuchtengehäuse, jedem Herd-/Boiler-Anschluss und zu Wasser-, Gas- und Heizungsrohren. Die Norm nennt keinen festen Grenzwert, sondern verlangt einen plausiblen Wert passend zur Leitung. In der Praxis gilt als Richtwert ≤ 0,3 Ω für übliche Stromkreise und ≤ 1 Ω als absolute Obergrenze.",
+      formula: "Erwartungswert: R_PE = l / (γ · A) → 20 m, 2,5 mm² Cu: 20 / (56 · 2,5) ≈ 0,14 Ω",
+      tip: "Rechne den Erwartungswert kurz im Kopf vor – liegt der Messwert deutlich darüber, sitzt irgendwo eine lose PE-Klemme.",
+      source: "DIN VDE 0100-600 Abschnitt 6.4.3.2 · Fachkunde Kap. 5"
+    },
+    {
+      id: "mp-04",
+      category: "messpraxis",
+      fach: "IE",
+      lehrjahr: 3,
+      isRetro: false,
+      isWeakSpot: false,
+      title: "R_ISO – Einstellung 230/400 V",
+      question: "Wie stellst du den Installationstester für die Isolationsmessung eines 230/400-V-Stromkreises ein, und welcher Mindestwert gilt?",
+      options: [
+        "R_ISO, Prüfspannung 250 V DC, Nennmessstrom ≥ 1 mA; Mindestwert R_ISO ≥ 0,5 MΩ",
+        "R_ISO, Prüfspannung 500 V DC, Nennmessstrom ≥ 1 mA; Mindestwert R_ISO ≥ 1,0 MΩ",
+        "R_ISO, Prüfspannung 1000 V DC, Nennmessstrom ≥ 10 mA; Mindestwert R_ISO ≥ 10 MΩ",
+        "R_LO, Prüfspannung 500 V AC, Nennmessstrom ≥ 200 mA; Mindestwert R_ISO ≥ 1,0 kΩ"
+      ],
+      correctIndex: 1,
+      explanation: "DIN VDE 0100-600 Tabelle 6.1: SELV/PELV → 250 V DC, ≥ 0,5 MΩ · Stromkreise bis 500 V (also 230/400 V, auch FELV) → 500 V DC, ≥ 1,0 MΩ · über 500 V → 1000 V DC, ≥ 1,0 MΩ. Der Tester muss bei der Prüfspannung einen Messstrom von mindestens 1 mA liefern können (DIN EN 61557-2). Es wird mit Gleichspannung gemessen, damit kapazitive Ströme der Leitung das Ergebnis nicht verfälschen. In der Praxis liegen neue Anlagen meist bei > 100 MΩ – ein Wert knapp über 1 MΩ ist zwar „bestanden“, aber verdächtig.",
+      formula: "U_N ≤ 500 V → U_Prüf = 500 V DC → R_ISO ≥ 1,0 MΩ",
+      tip: "Merkhilfe „5-1“: 500 Volt, 1 Megaohm. Kleinspannung halbiert alles: 250 V, 0,5 MΩ.",
+      source: "DIN VDE 0100-600 Tab. 6.1 / DIN EN 61557-2"
+    },
+    {
+      id: "mp-05",
+      category: "messpraxis",
+      fach: "IE",
+      lehrjahr: 3,
+      isRetro: false,
+      isWeakSpot: false,
+      title: "R_ISO – SELV/PELV",
+      question: "Du misst den Isolationswiderstand einer SELV-Kleinspannungsanlage (24-V-LED-Band). Welche Prüfspannung und welcher Grenzwert gelten?",
+      options: [
+        "500 V DC, R_ISO ≥ 1,0 MΩ",
+        "50 V AC, R_ISO ≥ 0,25 MΩ",
+        "1000 V DC, R_ISO ≥ 1,0 MΩ",
+        "250 V DC, R_ISO ≥ 0,5 MΩ"
+      ],
+      correctIndex: 3,
+      explanation: "Für SELV- und PELV-Stromkreise schreibt DIN VDE 0100-600 eine Prüfspannung von 250 V DC und einen Mindestisolationswiderstand von 0,5 MΩ vor. Gemessen wird zwischen den Kleinspannungsleitern und den Leitern anderer Stromkreise bzw. PE. Das Netzteil (SELV-Quelle) und die LED-Elektronik werden vorher abgeklemmt – sonst misst du den Treiber statt der Isolation oder beschädigst ihn.",
+      formula: "SELV/PELV: 250 V DC → ≥ 0,5 MΩ",
+      tip: "Prüfungsklassiker in Tabellenform: 250/0,5 – 500/1,0 – 1000/1,0. Die Reihe einmal auswendig lernen spart Punkte.",
+      source: "DIN VDE 0100-600 Tab. 6.1"
+    },
+    {
+      id: "mp-06",
+      category: "messpraxis",
+      fach: "IE",
+      lehrjahr: 3,
+      isRetro: false,
+      isWeakSpot: false,
+      title: "R_ISO – Elektronik schützen",
+      question: "Im Stromkreis hängen Dimmer, LED-Treiber, KNX-Aktoren und ein SPD Typ 3. Wie führst du die 500-V-Isolationsmessung fachgerecht durch?",
+      options: [
+        "Unter Spannung messen, weil die Elektronik dann aktiv ist und die 500-V-Prüfspannung selbst begrenzt",
+        "Mit 1000 V DC messen, weil die höhere Prüfspannung die Elektronik schneller sicher durchschalten lässt",
+        "Spannungsfrei schalten, Verbraucher abklemmen oder L1, L2, L3 und N brücken und gemeinsam gegen PE messen",
+        "Nur L gegen N messen und den PE abklemmen, damit kein Prüfstrom über die Gehäuse fließen kann"
+      ],
+      correctIndex: 2,
+      explanation: "Zwischen L und N sitzt die Elektronik: Kondensatoren, Halbleiter, Varistoren. 500 V DC zwischen L und N können sie zerstören – und das Messergebnis zeigt dann die Bauteile statt der Leitungsisolation. Lösung: Anlage spannungsfrei, empfindliche Verbraucher abklemmen ODER alle aktiven Leiter (L1, L2, L3, N) miteinander brücken und gemeinsam gegen PE messen. Dann liegt an der Elektronik keine Spannung (beide Seiten gleiches Potenzial), geprüft wird nur die Isolation gegen Erde. Überspannungsschutzgeräte (SPD), die gegen PE geschaltet sind, werden vorher abgetrennt, sonst sprechen sie an und verfälschen den Wert.",
+      tip: "Nach dem Messen die Brücken unbedingt wieder entfernen und dokumentieren, welche Geräte abgeklemmt waren – sonst bleibt beim Kunden ein L–N-Kurzschluss zurück.",
+      source: "DIN VDE 0100-600 Abschnitt 6.4.3.3 · Herstellerhinweise KNX/Dimmer"
+    },
+    {
+      id: "mp-07",
+      category: "messpraxis",
+      fach: "IE",
+      lehrjahr: 3,
+      isRetro: false,
+      isWeakSpot: false,
+      title: "Z_S & Z_I – Messbedingungen",
+      question: "Welche Voraussetzung gilt für die Messung der Schleifenimpedanz Z_S (L–PE) und des Netzinnenwiderstands Z_I (L–N)?",
+      options: [
+        "Messung unter Netzspannung 230 V am Stromkreisende, nachdem R_LO und R_ISO in Ordnung sind",
+        "Messung im spannungsfreien Zustand mit 500 V DC, nachdem der RCD vorher herausgenommen wurde",
+        "Messung mit abgeklemmtem Schutzleiter, damit der Prüfstrom nur über den Neutralleiter fließt",
+        "Messung mit 24 V Kleinspannung aus dem Tester, damit kein Strom über die Anlage fließen kann"
+      ],
+      correctIndex: 0,
+      explanation: "Z_S und Z_I sind Messungen unter Netzspannung: Der Tester belastet die Schleife kurz mit einem definierten Prüfstrom und berechnet aus dem Spannungseinbruch die Impedanz. Z_S (L–PE) zeigt, ob im Körperschluss genug Kurzschlussstrom fließt, damit der LS rechtzeitig abschaltet. Z_I (L–N) braucht man für den Kurzschlussstrom I_k und den Spannungsfall. Weil hier 230 V anliegen, müssen vorher R_LO (Schutzleiter durchgängig) und R_ISO (keine Isolationsfehler) bestanden sein. Gemessen wird am Stromkreisende bzw. an der entferntesten Steckdose – dort ist Z_S am größten.",
+      formula: "I_k = U_0 / Z_S  ·  I_k ≥ I_a (Abschaltstrom des Schutzorgans)",
+      tip: "Immer an der LETZTEN Steckdose des Stromkreises messen – das ist der ungünstigste Punkt.",
+      source: "DIN VDE 0100-600 Abschnitt 6.4.3.6 / DIN EN 61557-3"
+    },
+    {
+      id: "mp-08",
+      category: "messpraxis",
+      fach: "IE",
+      lehrjahr: 3,
+      isRetro: false,
+      isWeakSpot: false,
+      title: "Z_S hinter RCD – No-Trip-Modus",
+      question: "Bei der Z_S-Messung (L–PE) hinter einem 30-mA-RCD fliegt jedes Mal der RCD raus. Was stellst du am Tester ein?",
+      options: [
+        "Modus „Z_I (L–N)“, weil dabei der Prüfstrom über den PE zurückfließt und den RCD blockiert",
+        "Modus „Z_S ohne RCD-Auslösung“ (No-Trip): Prüfstrom < 15 mA oder DC-Vormagnetisierung",
+        "Modus „RCD-Rampe“, weil der Tester dabei den Auslösestrom automatisch über 30 mA anhebt",
+        "Modus „R_ISO 500 V“, weil Gleichspannung den RCD nicht auslöst und denselben Wert liefert"
+      ],
+      correctIndex: 1,
+      explanation: "Bei der klassischen Z_S-Messung fließt ein Prüfstrom von mehreren Ampere von L über PE zurück – also NICHT über N. Für den RCD ist das ein Fehlerstrom → er löst aus. Moderne Tester bieten deshalb einen Modus „Z_S RCD / No-Trip / Hi-Res“: Entweder wird mit sehr kleinem Prüfstrom unter 50 % von I_ΔN (also < 15 mA) über viele Perioden gemittelt, oder der Wandler des RCD wird mit Gleichstrom vormagnetisiert (gesättigt), damit er kurz „blind“ ist. Den RCD zu überbrücken ist tabu. Die Z_I-Messung (L–N) löst übrigens nicht aus, weil der Strom über N zurückfließt – sie ersetzt Z_S aber nicht.",
+      formula: "No-Trip-Bedingung: I_Prüf < 0,5 · I_ΔN = 15 mA",
+      tip: "Die DC-Vormagnetisierung funktioniert nur bei RCD Typ AC/A – bei Typ B (allstromsensitiv) braucht man das Niedrigstrom-Verfahren.",
+      source: "DIN EN 61557-3 · Bedienungsanleitungen Installationstester"
+    },
+    {
+      id: "mp-09",
+      category: "messpraxis",
+      fach: "IE",
+      lehrjahr: 3,
+      isRetro: false,
+      isWeakSpot: false,
+      title: "Z_S – Abschaltbedingung LS B16",
+      question: "Ein Steckdosenkreis ist mit LS B16 abgesichert (TN-System, 0,4 s). Welcher Z_S-Wert darf höchstens gemessen werden?",
+      options: [
+        "Rechnerisch 14,4 Ω (230 V / 16 A), in der Praxis mit 2/3-Faktor ≤ 9,60 Ω",
+        "Rechnerisch 1,44 Ω (230 V / 160 A), in der Praxis mit 2/3-Faktor ≤ 0,96 Ω",
+        "Rechnerisch 0,30 Ω wie bei R_LO, in der Praxis mit 2/3-Faktor ≤ 0,20 Ω",
+        "Rechnerisch 2,87 Ω (230 V / 80 A), in der Praxis mit 2/3-Faktor ≤ 1,91 Ω"
+      ],
+      correctIndex: 3,
+      explanation: "Ein LS mit B-Charakteristik löst magnetisch (unverzögert) zwischen 3 · I_n und 5 · I_n aus. Für die sichere Abschaltung rechnet man mit dem ungünstigsten Fall 5 · 16 A = 80 A. Damit dieser Strom fließen kann, darf die Schleife höchstens Z_S,max = 230 V / 80 A = 2,87 Ω haben. Weil sich die Leiter im Fehlerfall erwärmen (Widerstand steigt) und der Messwert eine Unsicherheit hat, verlangt DIN VDE 0100-600 (Anhang) für den Messwert den Faktor 2/3: 2,87 Ω · 2/3 ≈ 1,91 Ω. Der Wert 1,44 Ω / 0,96 Ω gehört zum C16 (10 · I_n = 160 A).",
+      formula: "I_a = 5 · I_n = 80 A  ·  Z_S,max = U_0 / I_a = 230 V / 80 A = 2,87 Ω  ·  Z_S(Mess) ≤ 2/3 · 2,87 Ω = 1,91 Ω",
+      tip: "B = 5-fach, C = 10-fach, D = 20-fach. Dann einfach 230 durch den Abschaltstrom teilen und mal 2/3.",
+      source: "DIN VDE 0100-410 / -600 Anhang C · Fachkunde Kap. 4 (Schutz durch Abschaltung)"
+    },
+    {
+      id: "mp-10",
+      category: "messpraxis",
+      fach: "IE",
+      lehrjahr: 3,
+      isRetro: false,
+      isWeakSpot: false,
+      title: "RCD-Prüfung – vollständige Messwerte",
+      question: "Welche Messwerte gehören zur vollständigen Prüfung eines RCD 30 mA Typ A mit dem Installationstester?",
+      options: [
+        "U_B ≤ 230 V, t_A bei 1 × I_ΔN ≤ 400 ms, t_A bei 5 × I_ΔN ≤ 200 ms, Auslösestrom I_A zwischen 30 und 60 mA",
+        "U_B ≤ 25 V, t_A bei 1 × I_ΔN ≤ 40 ms, t_A bei 5 × I_ΔN ≤ 300 ms, Auslösestrom I_A zwischen 0 und 15 mA",
+        "U_B ≤ 50 V, t_A bei 1 × I_ΔN ≤ 300 ms, t_A bei 5 × I_ΔN ≤ 40 ms, Auslösestrom I_A zwischen 15 und 30 mA",
+        "U_B ≤ 50 V, t_A bei 1 × I_ΔN ≤ 5 s, t_A bei 5 × I_ΔN ≤ 0,4 s, Auslösestrom I_A zwischen 30 und 300 mA"
+      ],
+      correctIndex: 2,
+      explanation: "Zur RCD-Prüfung gehören: 1. Berührungsspannung U_B bei Nennfehlerstrom – sie darf 50 V AC nicht überschreiten (der Tester misst sie meist vorab mit kleinem Strom ohne Auslösung). 2. Auslösezeit t_A bei 1 × I_ΔN: höchstens 300 ms (unverzögerter RCD). 3. Auslösezeit bei 5 × I_ΔN: höchstens 40 ms. 4. Auslösestrom I_A mit ansteigendem Prüfstrom (Rampe): Der RCD muss zwischen 50 % und 100 % von I_ΔN auslösen, bei 30 mA also zwischen 15 mA und 30 mA. Zusätzlich die Prüftaste „T“ betätigen (Mechanik-Test) – sie ersetzt die Messung aber nicht.",
+      formula: "U_B ≤ 50 V · t_A(1×) ≤ 300 ms · t_A(5×) ≤ 40 ms · 0,5 · I_ΔN ≤ I_A ≤ 1,0 · I_ΔN",
+      tip: "Selektive RCD (Typ S) sind absichtlich verzögert: t_A(1×) zwischen 130 und 500 ms, t_A(5×) zwischen 50 und 150 ms.",
+      source: "DIN VDE 0100-600 Abschnitt 6.4.3.7 / DIN EN 61557-6 / DIN EN 61008-1"
+    },
+    {
+      id: "mp-11",
+      category: "messpraxis",
+      fach: "IE",
+      lehrjahr: 3,
+      isRetro: false,
+      isWeakSpot: false,
+      title: "RCD-Rampentest bewerten",
+      question: "Beim Rampentest eines 30-mA-RCD zeigt der Tester „I_A = 12 mA“. Wie bewertest du das?",
+      options: [
+        "Auffällig: Ein RCD muss zwischen 50 % und 100 % von I_ΔN auslösen – hier also 15 bis 30 mA",
+        "Bestanden: Je früher ein RCD auslöst, desto sicherer ist er, eine Untergrenze gibt es nicht",
+        "Bestanden: Erst Auslöseströme oberhalb von 30 mA gelten als Mangel, darunter ist alles gut",
+        "Mangel: Ein RCD muss exakt bei 30,0 mA auslösen, jede Abweichung bedeutet einen Austausch"
+      ],
+      correctIndex: 0,
+      explanation: "Nach DIN EN 61008/61009 darf ein RCD unterhalb von 50 % I_ΔN nicht auslösen und muss spätestens bei 100 % I_ΔN auslösen. 12 mA liegen unter 15 mA → der Messwert ist auffällig. Häufigste Ursache: Ableitströme von angeschlossenen Geräten (Netzteile, EMV-Filter, PCs) fließen schon vorher über PE und addieren sich zum Prüfstrom – der RCD „sieht“ dann mehr als der Tester einspeist. Also: Verbraucher abziehen und neu messen. Löst er dann immer noch unter 15 mA aus, ist der RCD zu empfindlich (Gefahr von Fehlauslösungen) und wird getauscht.",
+      formula: "0,5 · 30 mA = 15 mA ≤ I_A ≤ 30 mA",
+      tip: "Vor jeder RCD-Messung alle Verbraucher im Stromkreis ausstecken – sonst misst du die Ableitströme des Kunden-PCs mit.",
+      source: "DIN EN 61008-1 / DIN EN 61557-6"
+    },
+    {
+      id: "mp-12",
+      category: "messpraxis",
+      fach: "IE",
+      lehrjahr: 3,
+      isRetro: false,
+      isWeakSpot: false,
+      title: "Prüfreihenfolge DIN VDE 0100-600",
+      question: "Warum muss R_LO als erste Messung (spannungsfrei) vor R_ISO, Z_S und der RCD-Prüfung erfolgen?",
+      options: [
+        "Weil die R_LO-Messung den RCD vormagnetisiert und er erst danach korrekte Auslösezeiten liefern kann",
+        "Weil bei unterbrochenem PE spätere Messungen unter Spannung 230 V auf berührbare Metallgehäuse verschleppen",
+        "Weil der Installationstester für die R_ISO-Messung den R_LO-Wert als Kompensationswert benötigt",
+        "Weil die Reihenfolge nur fürs Prüfprotokoll vorgeschrieben ist und technisch keine Bedeutung hat"
+      ],
+      correctIndex: 1,
+      explanation: "Bei der RCD-Prüfung und der Z_S-Messung schickt der Tester bei anliegenden 230 V bewusst Strom über den Schutzleiter. Ist der PE irgendwo unterbrochen, fließt dieser Strom nicht ab – stattdessen liegt an allen Gehäusen hinter der Unterbrechung gefährliche Berührungsspannung (bis 230 V)! Deshalb gilt die Reihenfolge: Besichtigen → R_LO (Schutzleiter durchgängig, spannungsfrei) → R_ISO (spannungsfrei) → erst dann Messungen unter Spannung (Z_S, Z_I, RCD, Drehfeld) → Erproben → Protokoll.",
+      formula: "Besichtigen → R_LO → R_ISO → Z_S / Z_I → RCD → Drehfeld → Erproben → Protokoll",
+      tip: "Eselsbrücke: „Erst die Leitung (LO), dann die Isolierung (ISO), dann der Saft (230 V).“",
+      source: "DIN VDE 0100-600 Abschnitt 6.4.3"
+    },
+    {
+      id: "mp-13",
+      category: "messpraxis",
+      fach: "SG",
+      lehrjahr: 1,
+      isRetro: true,
+      isWeakSpot: false,
+      title: "Multimeter – Spannung vs. Strom",
+      question: "Wie schließt du ein Digitalmultimeter für Spannungs- bzw. Strommessung richtig an?",
+      options: [
+        "U: COM + 10 A, in Reihe zur Last, R_i ≈ 0,01 Ω · I: COM + V/Ω, parallel, R_i ≈ 10 MΩ",
+        "U: COM + V/Ω, in Reihe zur Last, R_i ≈ 0,01 Ω · I: COM + mA, parallel, R_i ≈ 10 MΩ",
+        "U: COM + V/Ω, parallel zur Last, R_i ≈ 10 MΩ · I: COM + 10 A/mA, in Reihe, R_i ≈ 0,01 Ω",
+        "U: COM + mA, parallel zur Last, R_i ≈ 1 kΩ · I: COM + V/Ω, in Reihe, R_i ≈ 1 kΩ"
+      ],
+      correctIndex: 2,
+      explanation: "Spannung ist eine Potenzialdifferenz – das Messgerät wird PARALLEL zum Bauteil angeschlossen (Buchsen COM und V/Ω, Drehschalter V~ oder V=). Damit es die Schaltung nicht belastet, hat es einen sehr hohen Innenwiderstand (ca. 10 MΩ). Strom muss DURCH das Messgerät fließen – es wird in REIHE geschaltet, der Stromkreis also aufgetrennt (Buchsen COM und 10 A bzw. mA, Drehschalter A~ oder A=). Damit es keinen Spannungsfall verursacht, ist der Innenwiderstand winzig (interner Shunt, ca. 0,01 Ω).",
+      formula: "Voltmeter: parallel, R_i → ∞  ·  Amperemeter: in Reihe, R_i → 0",
+      tip: "Ströme misst man auf der Baustelle meist mit der Stromzange – die Messleitungen bleiben dabei in V/Ω.",
+      source: "Fachkunde Kap. 1 (Messen elektrischer Größen) · LF 1"
+    },
+    {
+      id: "mp-14",
+      category: "messpraxis",
+      fach: "SG",
+      lehrjahr: 1,
+      isRetro: true,
+      isWeakSpot: false,
+      title: "Multimeter – 10-A-Buchsen-Falle",
+      question: "Ein Kollege lässt die rote Messleitung in der 10-A-Buchse stecken, stellt auf V~ und hält die Spitzen in eine 230-V-Steckdose. Was passiert?",
+      options: [
+        "Das Gerät zeigt korrekt 230 V an, weil der Drehschalter die 10-A-Buchse automatisch auf Spannung umstellt",
+        "Das Gerät zeigt 0 V an, weil der sehr hohe Innenwiderstand der 10-A-Buchse keinen Stromfluss zulässt",
+        "Der RCD der Steckdose löst aus, weil der Messstrom über den Schutzleiter des Multimeters abfließt",
+        "Satter Kurzschluss über den internen Shunt: Feinsicherung brennt durch, ohne CAT-Schutz droht Lichtbogen"
+      ],
+      correctIndex: 3,
+      explanation: "Die 10-A-Buchse führt direkt auf den Strom-Shunt mit ca. 0,01 Ω – egal, wo der Drehschalter steht. An 230 V entsteht ein Kurzschluss mit theoretisch tausenden Ampere. Im besten Fall brennt die hochwertige HRC-Feinsicherung im Multimeter (z. B. 11 A / 1000 V) durch. Billiggeräte ohne geeignete Sicherung und ohne CAT-III/IV-Einstufung können explodieren – mit Lichtbogen, Verbrennungen und Augenverletzungen. Deshalb: Nach jeder Strommessung SOFORT die Messleitung zurück in die V/Ω-Buchse stecken. Viele Geräte warnen akustisch („Lead Alert“).",
+      formula: "I_k ≈ 230 V / (R_Shunt + R_Leitung) → mehrere kA",
+      tip: "Nur Multimeter mit CAT III 1000 V / CAT IV 600 V und HRC-Sicherungen auf die Baustelle mitnehmen.",
+      source: "DIN EN 61010-1 (Messkategorien CAT) · Fachkunde Kap. 1"
+    },
+    {
+      id: "mp-15",
+      category: "messpraxis",
+      fach: "SG",
+      lehrjahr: 2,
+      isRetro: true,
+      isWeakSpot: false,
+      title: "True RMS – Echteffektivwert",
+      question: "Wann brauchst du zwingend ein True-RMS-Multimeter (Echteffektivwert-Messung)?",
+      options: [
+        "Bei verzerrten, nicht sinusförmigen Größen, z. B. durch Schaltnetzteile, LED-Treiber, Dimmer oder FU",
+        "Bei reinen Gleichspannungen, z. B. an Batterien, Akkus, PV-Modulen oder geregelten 24-V-Netzteilen",
+        "Bei Widerstandsmessungen, z. B. an Heizstäben, Motorwicklungen, Erdern oder Schutzleiterverbindungen",
+        "Bei rein sinusförmigen Größen, z. B. an Glühlampen, Heizlüftern, Kochplatten oder Warmwasserboilern"
+      ],
+      correctIndex: 0,
+      explanation: "Einfache (mittelwertbildende) Multimeter messen den Gleichrichtwert und multiplizieren ihn mit dem Formfaktor 1,11 – das stimmt NUR bei reinem Sinus. Schaltnetzteile, LED-Treiber, Phasenanschnitt-Dimmer und Frequenzumrichter ziehen aber pulsförmige Ströme mit hohem Scheitelfaktor (Crestfaktor). Ein Nicht-True-RMS-Gerät zeigt dann bis zu 30–50 % zu wenig an – die Leitung kann überlastet sein, obwohl das Messgerät harmlose Werte zeigt. Ein True-RMS-Gerät berechnet den echten Effektivwert aus der Kurvenform.",
+      formula: "Sinus: U_eff = Û / √2 = 1,11 · Gleichrichtwert  ·  bei Verzerrung gilt der Faktor 1,11 NICHT mehr",
+      tip: "Auf modernen Baustellen (LED, Wärmepumpe, Wallbox) ist True RMS Pflicht – achte auf den Aufdruck „TRMS“.",
+      source: "Fachkunde Kap. 1 & 10 (Oberschwingungen)"
+    },
+    {
+      id: "mp-16",
+      category: "messpraxis",
+      fach: "SG",
+      lehrjahr: 2,
+      isRetro: true,
+      isWeakSpot: false,
+      title: "Oszilloskop – Periode & Scheitelwert ablesen",
+      question: "Oszilloskop: Time/Div = 5 ms, eine Periode ist 4 Kästchen breit; Volt/Div = 100 V, der Scheitel liegt 3,25 Kästchen über der Nulllinie. Was liest du ab?",
+      options: [
+        "T = 1,25 ms → f = 800 Hz; Û = 30,8 V → U_eff ≈ 22 V",
+        "T = 20 ms → f = 50 Hz; Û = 325 V → U_eff ≈ 230 V",
+        "T = 20 ms → f = 50 Hz; Û = 230 V → U_eff ≈ 163 V",
+        "T = 4 ms → f = 250 Hz; Û = 325 V → U_eff ≈ 460 V"
+      ],
+      correctIndex: 1,
+      explanation: "Horizontal (Zeitbasis): 4 Div · 5 ms/Div = 20 ms = Periodendauer T. Frequenz f = 1 / T = 1 / 0,02 s = 50 Hz. Vertikal: 3,25 Div · 100 V/Div = 325 V = Scheitelwert Û (Amplitude, von der Nulllinie bis zur Spitze). Der Effektivwert bei Sinus: U_eff = Û / √2 = 325 V / 1,414 ≈ 230 V. Achtung: Misst man von Spitze zu Spitze (6,5 Div), erhält man U_ss = 650 V – nicht mit Û verwechseln!",
+      formula: "T = Div_x · Time/Div  ·  f = 1/T  ·  Û = Div_y · Volt/Div  ·  U_eff = Û / √2",
+      tip: "Mit 10:1-Tastkopf daran denken, dass manche Oszis den Teiler NICHT automatisch einrechnen – dann den Wert mal 10 nehmen.",
+      source: "Fachkunde Kap. 1 (Oszilloskop)"
+    },
+    {
+      id: "mp-17",
+      category: "messpraxis",
+      fach: "SG",
+      lehrjahr: 2,
+      isRetro: true,
+      isWeakSpot: false,
+      title: "Oszilloskop – Trigger",
+      question: "Wozu dient der Trigger (Level & Slope / Flanke) am Oszilloskop?",
+      options: [
+        "Er verstärkt das Messsignal um den eingestellten Faktor, damit kleine Spannungen das ganze Raster ausfüllen",
+        "Er trennt den Gleichspannungsanteil vom Signal ab, damit nur die überlagerte Brummspannung sichtbar wird",
+        "Er startet die Zeitablenkung immer bei festem Spannungswert auf steigender oder fallender Flanke – das Bild steht",
+        "Er speichert den höchsten gemessenen Spannungswert, damit Spitzen nach der Messung ablesbar bleiben"
+      ],
+      correctIndex: 2,
+      explanation: "Ohne Trigger startet jeder Strahldurchlauf an einer zufälligen Stelle der Kurve – das Bild „läuft“ durch und flimmert. Der Trigger synchronisiert: Die Zeitablenkung beginnt erst, wenn das Signal einen eingestellten Spannungswert (Level) mit der gewählten Flanke (Slope: steigend ↗ oder fallend ↘) durchläuft. Bei periodischen Signalen beginnt so jeder Durchlauf an derselben Stelle – die Kurve steht scharf still. Im Single-Modus kann man damit auch einmalige Ereignisse (z. B. Einschaltstromspitze) einfrieren.",
+      tip: "Bild läuft durch? Erst Trigger-Quelle (CH1/CH2) prüfen, dann Level in den Bereich der Kurve drehen – oder „Auto-Set“ drücken.",
+      source: "Fachkunde Kap. 1 (Oszilloskop)"
+    },
+    {
+      id: "mp-18",
+      category: "messpraxis",
+      fach: "SG",
+      lehrjahr: 2,
+      isRetro: true,
+      isWeakSpot: false,
+      title: "Oszilloskop – Kopplung DC / AC / GND",
+      question: "Du willst die Restwelligkeit (ca. 0,2 V Brumm) eines 24-V-DC-Netzteils sichtbar machen. Welche Eingangskopplung wählst du?",
+      options: [
+        "DC: Nur so wird der Gleichanteil abgetrennt und die kleine Wechselspannung allein sichtbar gemacht",
+        "GND: Der Eingang misst dann gegen Masse und zeigt ausschließlich die Abweichungen von den 24 V an",
+        "AC: Ein Koppelkondensator verdoppelt den Gleichanteil, sodass die Welligkeit deutlicher hervortritt",
+        "AC: Ein Koppelkondensator blockiert die 24 V Gleichanteil, nur die Brummspannung wird groß dargestellt"
+      ],
+      correctIndex: 3,
+      explanation: "DC-Kopplung zeigt das komplette Signal (Gleich- UND Wechselanteil) – 0,2 V Brumm auf 24 V wären bei passendem V/Div nur ein dünner Strich ganz oben. AC-Kopplung schaltet einen Koppelkondensator in Reihe: Er sperrt den Gleichanteil, die überlagerte Wechselspannung geht durch und kann mit z. B. 50 mV/Div groß dargestellt werden. GND trennt das Eingangssignal ab und legt den Verstärker intern auf Masse – damit stellt man die Nulllinie (Referenz) auf dem Raster ein.",
+      formula: "DC = alles · AC = nur Wechselanteil (Kondensator) · GND = Nulllinie justieren",
+      tip: "Sehr langsame Signale (< 10 Hz) immer in DC messen – der Koppelkondensator verfälscht sonst die Kurvenform.",
+      source: "Fachkunde Kap. 1 (Oszilloskop)"
+    },
+    {
+      id: "mp-19",
+      category: "messpraxis",
+      fach: "SG",
+      lehrjahr: 3,
+      isRetro: false,
+      isWeakSpot: false,
+      title: "Oszilloskop – Tastkopf & Masseklemme",
+      question: "Du willst mit einem netzbetriebenen Standard-Oszilloskop und 10:1-Tastkopf an einem Phasenanschnitt-Dimmer messen. Was ist der gefährlichste Fehler?",
+      options: [
+        "Den Tastkopf auf 10:1 stellen – dadurch steigt die Spannung am Oszilloskop-Eingang auf das Zehnfache",
+        "Die Krokodil-Masseklemme an L anklemmen – sie liegt über das Netzkabel auf PE, es entsteht ein Erdschluss",
+        "Die Masseklemme an N anklemmen – der Neutralleiter ist immer spannungsführend und zerstört den Eingang",
+        "Den Tastkopf auf 1:1 stellen – dadurch steigt der Eingangswiderstand auf 100 MΩ und das Signal fehlt"
+      ],
+      correctIndex: 1,
+      explanation: "Bei einem normalen Tischoszilloskop ist die schwarze Masseklemme jedes Tastkopfs direkt mit dem Gehäuse und damit mit dem Schutzleiter PE des Netzkabels verbunden. Klemmst du sie an einen Außenleiter L, schließt du L direkt gegen PE kurz – Lichtbogen am Tastkopf, Tastkopf zerstört, RCD/LS löst aus. Der 10:1-Tastkopf teilt die Spannung durch 10 und erhöht den Eingangswiderstand von 1 MΩ auf 10 MΩ (geringere Belastung der Schaltung) – das ist richtig und gewollt. Für Netzmessungen nimmt man einen Differenztastkopf oder ein isoliertes, batteriebetriebenes Handheld-Oszilloskop mit CAT-Einstufung. Niemals den PE am Oszi abkleben!",
+      formula: "10:1 → U_Eingang = U_Mess / 10, R_E = 10 MΩ  ·  1:1 → R_E = 1 MΩ",
+      tip: "Merksatz: „Die Krokodilklemme ist Erde.“ Am Netz nur mit Differenztastkopf messen.",
+      source: "Fachkunde Kap. 1 (Oszilloskop) · DIN EN 61010-031 (Tastköpfe)"
+    },
+    {
+      id: "mp-20",
+      category: "messpraxis",
+      fach: "IE",
+      lehrjahr: 3,
+      isRetro: false,
+      isWeakSpot: false,
+      title: "Prüfprotokoll – Werkstatt C16",
+      question: "Prüfprotokoll-Zeile: „Steckdosen Werkstatt · LS C16 · R_LO = 0,18 Ω · R_ISO = 0,35 MΩ (500 V) · Z_S = 0,85 Ω“. Welcher Wert fällt durch?",
+      options: [
+        "R_ISO: 0,35 MΩ liegt unter dem Mindestwert 1,0 MΩ – Isolationsfehler suchen, Kreis nicht freigeben",
+        "R_LO: 0,18 Ω liegt über dem Richtwert 0,1 Ω – alle Schutzleiterklemmen nachziehen und neu messen",
+        "Z_S: 0,85 Ω liegt über dem Grenzwert für C16 – der LS-Schalter schaltet nicht rechtzeitig ab",
+        "Keiner: Alle drei Messwerte liegen sicher innerhalb der Grenzwerte nach DIN VDE 0100-600"
+      ],
+      correctIndex: 0,
+      explanation: "R_LO = 0,18 Ω ist für einen Werkstatt-Steckdosenkreis plausibel (≤ 0,3 Ω) → i. O. Z_S für C16: I_a = 10 · 16 A = 160 A → Z_S,max = 230 V / 160 A = 1,44 Ω, mit 2/3-Faktor 0,96 Ω. 0,85 Ω < 0,96 Ω → i. O. R_ISO = 0,35 MΩ liegt aber deutlich unter 1,0 MΩ (500 V DC) → NICHT bestanden. Der Stromkreis darf so nicht in Betrieb gehen. Fehlersuche: Verbraucher abgeklemmt? Feuchtigkeit in Aufputzdosen? Angeritzte Ader? Halbierungsverfahren anwenden.",
+      formula: "C16: Z_S ≤ 2/3 · 230 V / 160 A = 0,96 Ω  ·  R_ISO ≥ 1,0 MΩ",
+      tip: "Im Prüfprotokoll den Mangel eintragen, den Stromkreis kennzeichnen und den Auftraggeber schriftlich informieren.",
+      source: "DIN VDE 0100-600 · ZVEH-Prüfprotokoll"
+    },
+    {
+      id: "mp-21",
+      category: "messpraxis",
+      fach: "IE",
+      lehrjahr: 3,
+      isRetro: false,
+      isWeakSpot: false,
+      title: "Prüfprotokoll – Küche B16",
+      question: "Protokoll: „Küche Arbeitsplatte · LS B16 · R_LO = 0,24 Ω · R_ISO > 200 MΩ · Z_S = 2,35 Ω“. Ist der Stromkreis in Ordnung?",
+      options: [
+        "Nein: R_ISO > 200 MΩ ist unplausibel hoch und deutet auf einen unterbrochenen Neutralleiter hin",
+        "Nein: R_LO = 0,24 Ω überschreitet den Grenzwert von 0,1 Ω für Steckdosenkreise in der Küche",
+        "Nein: Z_S = 2,35 Ω überschreitet den Praxis-Grenzwert 1,91 Ω für B16 – die Abschaltung ist nicht sicher",
+        "Ja: Alle Werte liegen in den Grenzen, denn Z_S darf bei einem B16 bis zu 14,4 Ω betragen"
+      ],
+      correctIndex: 2,
+      explanation: "R_ISO > 200 MΩ ist ein typischer Wert für eine neue, saubere Anlage (Messbereichsende) → sehr gut. R_LO = 0,24 Ω ≤ 0,3 Ω → i. O. Z_S: Für B16 gilt I_a = 5 · 16 A = 80 A → rechnerisch 2,87 Ω, mit dem 2/3-Faktor für Leitererwärmung und Messunsicherheit höchstens 1,91 Ω. Gemessen 2,35 Ω → die Abschaltbedingung ist nicht sicher erfüllt. Abhilfe: größerer Querschnitt, kürzere Leitung, LS mit kleinerem Bemessungsstrom oder zusätzlicher Schutz durch RCD (dann gilt die RCD-Abschaltbedingung).",
+      formula: "B16: Z_S ≤ 2/3 · 230 V / 80 A = 1,91 Ω",
+      tip: "Ein „> 200 MΩ“ im Display heißt nicht Fehler, sondern „besser als der Messbereich“.",
+      source: "DIN VDE 0100-410 / -600 Anhang C"
+    },
+    {
+      id: "mp-22",
+      category: "messpraxis",
+      fach: "IE",
+      lehrjahr: 3,
+      isRetro: false,
+      isWeakSpot: false,
+      title: "Prüfprotokoll – RCD im Bad",
+      question: "RCD-Zeile: „Bad · RCD 40 A / 30 mA Typ A · U_B = 62 V · t_A (1 × I_ΔN) = 26 ms · t_A (5 × I_ΔN) = 14 ms · I_A = 24 mA“. Welche Aussage stimmt?",
+      options: [
+        "Nicht bestanden: t_A = 26 ms ist zu schnell, ein RCD muss bei 1 × I_ΔN mindestens 40 ms verzögern",
+        "Nicht bestanden: U_B = 62 V überschreitet 50 V – die Schutzleiter-/Erdungsverbindung ist zu hochohmig",
+        "Nicht bestanden: I_A = 24 mA ist zu hoch, ein 30-mA-RCD muss spätestens bei 15 mA auslösen",
+        "Bestanden: Alle Werte sind in Ordnung, die Berührungsspannung darf im Bad bis zu 120 V betragen"
+      ],
+      correctIndex: 1,
+      explanation: "Auslösezeiten 26 ms (≤ 300 ms) und 14 ms (≤ 40 ms) → i. O. Auslösestrom 24 mA liegt zwischen 15 und 30 mA → i. O. Aber: Die Berührungsspannung U_B = 62 V überschreitet die vereinbarte Grenze von 50 V AC. U_B = I_ΔN · R_Schleife → 62 V / 0,03 A ≈ 2 kΩ im Schutzleiterweg bzw. Erder – da stimmt etwas mit dem PE oder (im TT-System) mit dem Anlagenerder nicht. Prüfung NICHT bestanden, PE-Weg bzw. Erdung sanieren.",
+      formula: "U_B = I_ΔN · R_A ≤ 50 V → R_A ≤ 50 V / 0,03 A ≈ 1667 Ω",
+      tip: "Hohe U_B im TN-System? Dann ist fast immer ein PE-Übergang (Klemme, Steckdose) hochohmig – zurück zur R_LO-Messung!",
+      source: "DIN VDE 0100-410 / -600 · DIN EN 61557-6"
+    },
+    {
+      id: "mp-23",
+      category: "messpraxis",
+      fach: "IE",
+      lehrjahr: 3,
+      isRetro: false,
+      isWeakSpot: false,
+      title: "Prüfprotokoll – Gartenbeleuchtung",
+      question: "Protokoll: „Gartenbeleuchtung · LS B10 · NYM-J 3×1,5 mm², 45 m · R_LO = 1,8 Ω · R_ISO = 3,5 MΩ · Z_S = 1,6 Ω“. Was fällt dir auf?",
+      options: [
+        "R_ISO ist zu niedrig: Außenstromkreise brauchen grundsätzlich mindestens 10 MΩ Isolationswiderstand",
+        "Z_S ist zu hoch: Für einen LS B10 gilt ein Praxis-Grenzwert von höchstens 0,96 Ω für die Schleife",
+        "Alles in Ordnung: Bei Außenleitungen ist ein R_LO bis 2 Ω nach DIN VDE 0100-600 ausdrücklich erlaubt",
+        "R_LO ist zu hoch: erwartet ≈ 0,54 Ω (45 m / (56 · 1,5 mm²)) – eine schlechte PE-Klemmstelle suchen"
+      ],
+      correctIndex: 3,
+      explanation: "Erwartungswert des Schutzleiters: R = l / (γ · A) = 45 m / (56 m/(Ω·mm²) · 1,5 mm²) ≈ 0,54 Ω. Gemessen 1,8 Ω – mehr als das Dreifache und über 1 Ω → verdächtig, irgendwo ist eine Klemmstelle hochohmig (z. B. korrodierte Klemme in einer Außendose). R_ISO = 3,5 MΩ ≥ 1,0 MΩ → bestanden. Z_S für B10: I_a = 50 A → 4,6 Ω, mit 2/3-Faktor 3,07 Ω → 1,6 Ω ist i. O. Z_S ist trotzdem okay, weil der Tester L UND PE zusammen misst und der Wert noch weit unter dem Grenzwert liegt – genau deshalb ist R_LO eine eigene Messung.",
+      formula: "R_PE = l / (γ · A) = 45 / (56 · 1,5) ≈ 0,54 Ω",
+      tip: "Bei Außendosen immer an Feuchtigkeit und Korrosion denken – IP-Schutzart und Dichtungen prüfen.",
+      source: "DIN VDE 0100-600 · Fachkunde Kap. 4 & 5"
     }
   ],
 
@@ -1927,6 +2418,30 @@ window.ELEKTRO_DATA = {
         "Lichtruf: Abstellen nur dort, wo geholfen wurde – im Raum.",
         "Halbieren statt Raten: 16 Punkte → 4 Messungen.",
         "Kein Protokoll = keine Beweise."
+      ]
+    },
+    {
+      id: "cs-messpraxis",
+      category: "messpraxis",
+      title: "Messpraxis: VDE 0100-600 Grenzwerte, Multimeter & Oszilloskop",
+      formulas: [
+        { label: "Prüfreihenfolge", formula: "Besichtigen → R_LO → R_ISO (spannungsfrei) → Z_S / Z_I → RCD → Drehfeld (unter Spannung) → Erproben → Protokoll" },
+        { label: "R_LO", formula: "I ≥ 200 mA DC, U_0 4–24 V, ± umpolen, vorher Nullabgleich R_komp · Richtwert ≤ 0,3 Ω (max. 1 Ω) · R = l / (56 · A)" },
+        { label: "R_ISO", formula: "SELV/PELV: 250 V DC → ≥ 0,5 MΩ | ≤ 500 V: 500 V DC → ≥ 1,0 MΩ | > 500 V: 1000 V DC → ≥ 1,0 MΩ" },
+        { label: "Z_S (TN, 0,4 s)", formula: "Z_S ≤ 2/3 · U_0 / I_a · B16: I_a = 80 A → 2,87 Ω → 1,91 Ω | C16: I_a = 160 A → 1,44 Ω → 0,96 Ω" },
+        { label: "RCD 30 mA", formula: "U_B ≤ 50 V · t_A(1 × I_ΔN) ≤ 300 ms · t_A(5 × I_ΔN) ≤ 40 ms · I_A = 15–30 mA (0,5–1,0 · I_ΔN)" },
+        { label: "Multimeter", formula: "U: COM + V/Ω, parallel, R_i ≈ 10 MΩ | I: COM + 10 A/mA, in Reihe, R_i ≈ 0,01 Ω | TRMS bei LED/FU/Dimmer" },
+        { label: "Oszilloskop", formula: "T = Div · Time/Div · f = 1/T · Û = Div · Volt/Div · U_eff = Û / √2 · 10:1 → R_E = 10 MΩ" }
+      ],
+      siteTip: "Vor dem ersten Messwert: Messleitungen kompensieren, Prüfer an bekannter Quelle testen, Verbraucher abziehen. R_LO und R_ISO IMMER spannungsfrei und VOR den Messungen unter Spannung. Bei Z_S hinter dem RCD den No-Trip-Modus wählen. Am Netz nie die Krokodilklemme eines Tisch-Oszis an L – sie ist PE!",
+      mnemonics: [
+        "„5-1“: 500 V Prüfspannung, 1 MΩ Mindestwert.",
+        "Erst die Leitung (LO), dann die Isolierung (ISO), dann der Saft (230 V).",
+        "B = 5-fach, C = 10-fach, D = 20-fach → 230 V durch I_a, dann mal 2/3.",
+        "RCD: 300 – 40 – 50 (ms, ms, Volt) und auslösen zwischen halb und voll.",
+        "Voltmeter parallel und hochohmig, Amperemeter in Reihe und niederohmig.",
+        "Nach der Strommessung: Stecker zurück in V/Ω!",
+        "Die Krokodilklemme ist Erde."
       ]
     }
   ]

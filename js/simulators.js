@@ -1414,7 +1414,8 @@ window.ElektroSimulators = (function () {
     { id: 'motor', label: '1. ⚙️ Motor-Klemmbrett' },
     { id: 'fluid', label: '2. 🔌 Taschen-FluidSIM' },
     { id: 'db', label: '3. 📡 Antennen-Pegelrechner' },
-    { id: 'logo', label: '4. 📟 Siemens LOGO! Steuerungs-Labor' }
+    { id: 'brett', label: '4. 🛠️ Schütz-Steckbrett (Selber bauen)' },
+    { id: 'logo', label: '5. 📟 Siemens LOGO! Steuerungs-Labor' }
   ];
   const labState = { activeSim: 'motor' };
 
@@ -1428,6 +1429,14 @@ window.ElektroSimulators = (function () {
           <button class="lab-tab-btn ${labState.activeSim === t.id ? 'active' : ''}" role="tab" aria-selected="${labState.activeSim === t.id}" onclick="ElektroSimulators.setLabTab('${t.id}')">${t.label}</button>`).join('')}
       </div>`;
 
+    // Schütz-Steckbrett (js/logo_simulator.js) sauber abbauen, bevor der Container neu befüllt wird
+    if (window.ElektroLogo) window.ElektroLogo.destroy();
+
+    if (labState.activeSim === 'brett') {
+      el.innerHTML = tabs + '<div id="schuetz-brett-root"></div>';
+      if (window.ElektroLogo) window.ElektroLogo.render(el.querySelector('#schuetz-brett-root'));
+      return;
+    }
     if (labState.activeSim === 'logo') {
       el.innerHTML = tabs + '<div id="logo-sim-root"></div>';
       renderLogoSimulator(el.querySelector('#logo-sim-root'));
